@@ -5,7 +5,9 @@ import dotenv from 'dotenv';
 import { dropTables } from './utils/dropTables';
 dotenv.config();
 
-import vehicleRoutes from '../src/models/vehicles/vehicleRoutes';
+import healthRoutes from './models/health/healthRoutes';
+import vehicleRoutes from './models/vehicles/vehicleRoutes';
+
 import { errorHandler } from './middlewares/errorHandler';
 
 const app = express();
@@ -21,6 +23,7 @@ await createTables();
 
 app.use(express.json());
 
+app.use('/api', healthRoutes);
 app.use('/api/vehicles', vehicleRoutes);
 
 app.use(errorHandler);
