@@ -5,8 +5,6 @@ import pool from '../../config/dbConfig';
 export const createPosition = async(data: CreatePosition): Promise<VehicleData> => {
     const { vehicleId, speed, lon, lat } = data;
 
-    console.log(`data: ${JSON.stringify(data, null, 2)}`);
-
     const result = await pool.query(`
         INSERT INTO vehicle_positions (vehicle_id, position, speed, created_at)
         VALUES (

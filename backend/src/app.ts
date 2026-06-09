@@ -14,12 +14,12 @@ const app = express();
 
 console.log("Hello, World!");
 
+await createTables();
 
 if (process.env.RESET_DB?.trim().toLowerCase() === 'true'){
     await cleanTables();
 }
 
-await createTables();
 
 app.use(express.json());
 
