@@ -69,6 +69,73 @@ On startup, the application:
 - Creates the `vehicle_positions` table if it does not exist.
 - Exposes the API on the port defined by `PORT`.
 
+## Run Tests
+
+The backend is configured with Jest, ts-jest, and Supertest for TypeScript API
+tests.
+
+With the database running and the `.env` file configured:
+
+```bash
+cd backend
+npm test
+```
+
+For watch mode:
+
+```bash
+cd backend
+npm run test:watch
+```
+
+Test files live in `backend/tests/` and use the `.test.ts` extension. The test
+setup file creates the required database structure before the suite and closes
+the PostgreSQL pool after it finishes.
+
+## Run the Ingestion Simulator
+
+The backend includes a simulator for sending vehicle position events to the API
+at a fixed target rate. It is useful for testing the current direct-ingestion
+path before adding alerts, geofencing, workers, or other backend behavior.
+
+Start the database and backend first, then run:
+
+```bash
+cd backend
+npm run simulate
+```
+
+The current script targets:
+
+- API URL: `http://localhost:3000/api/vehicles/positions`
+- Target rate: `725` requests per second
+- Duration: `60` seconds
+- Dispatch tick: `100` milliseconds
+- Max in-flight requests: `5000`
+
+Before starting, the simulator clears the `vehicle_positions` table. During the
+run it prints live counters, including sent requests, effective RPS, successful
+responses, failed responses, in-flight requests, dropped requests, attempted
+requests, and average latency.
+
+At the end it prints a benchmark summary with:
+
+- Attempted requests.
+- Total requests sent.
+- Successful responses.
+- Failed responses.
+- Requests still in flight.
+- Dropped requests.
+- p50, p95, and p99 latency.
+- Worst request latency.
+- Average latency.
+
+The simulator generates requests with valid UUIDs, random longitude and
+latitude values within the accepted API ranges, and random speed values. It
+currently measures only ingestion throughput for `POST /api/vehicles/positions`;
+it does not exercise future speed alerts, route validation, geofencing, or
+other domain rules.
+
 ## Run with Docker
 
 The project includes a `Dockerfile` inside `backend/` for building a backend

@@ -14,7 +14,5 @@ export const createTables = async() => {
         );
     `);
 
-    await pool.query(`SELECT * FROM vehicle_positions`);
-
     console.log('Tables created successfully!');
 }

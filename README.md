@@ -17,6 +17,8 @@ vehicle position ingestion endpoint.
 - pg
 - Zod
 - dotenv
+- Jest
+- Supertest
 - Docker / Docker Compose
 
 ## Current Status
@@ -30,17 +32,19 @@ Implemented:
 - Position insertion into PostgreSQL/PostGIS.
 - Automatic extension and table setup on application startup.
 - Centralized error handling middleware.
+- Automated API test setup with Jest and Supertest.
+- Vehicle position ingestion simulator.
+- Fixed-rate ingestion benchmark metrics.
 - Dockerfile for the backend.
 - Docker Compose setup for PostgreSQL/PostGIS.
 
 Not implemented yet:
 
-- Automated tests.
-- Vehicle simulator.
-- Benchmarks.
 - Message broker.
 - Workers.
 - Bulk inserts.
+- Speed alerts.
+- Position validity checks or geofencing rules.
 - Alert system.
 - Authentication.
 
@@ -49,3 +53,4 @@ Not implemented yet:
 - [Setup](docs/setup.md)
 - [API](docs/api.md)
 - [Architecture](docs/architecture.md)
+- [Benchmarks](docs/benchmarks.md)
