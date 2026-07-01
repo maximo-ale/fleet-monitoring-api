@@ -11,4 +11,5 @@ export const createPositionSchema = z.object({
         .coerce.number()
         .min(-90)
         .max(90),
+    eventTime: z.iso.datetime()
 });

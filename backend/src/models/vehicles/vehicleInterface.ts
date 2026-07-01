@@ -5,6 +5,7 @@ export interface VehicleData {
     lon: number,
     speed: number,
     createdAt: Date,
+    eventTime: string,
 }
 
 export interface CreatePosition {
@@ -12,4 +13,5 @@ export interface CreatePosition {
     speed: number,
     lat: number,
     lon: number,
+    eventTime: Date,
 }
