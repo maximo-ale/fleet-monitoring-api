@@ -13,6 +13,7 @@ interface ValidVehicleBody {
     speed: number,
     lat: number,
     lon: number,
+    eventTime: string,
 }
 
 interface InvalidVehicleBody {
@@ -20,6 +21,7 @@ interface InvalidVehicleBody {
     speed?: unknown,
     lat?: unknown,
     lon?: unknown,
+    eventTime?: unknown,
 }
 
 interface ValidCreatePosition {
@@ -47,6 +49,7 @@ describe('/api/vehicles', () => {
                     speed: 50,
                     lat: 30,
                     lon: 30,
+                    eventTime: new Date().toISOString(),
                 },
             },
             {
@@ -56,6 +59,7 @@ describe('/api/vehicles', () => {
                     speed: 50,
                     lat: -30,
                     lon: 30.312,
+                    eventTime: new Date().toISOString(),
                 },
             },
             {
@@ -65,6 +69,7 @@ describe('/api/vehicles', () => {
                     speed: 50,
                     lat: -90,
                     lon: 180,
+                    eventTime: new Date().toISOString(),
                 },
             },
             {
@@ -74,6 +79,7 @@ describe('/api/vehicles', () => {
                     speed: 0,
                     lat: -23,
                     lon: 1,
+                    eventTime: new Date().toISOString(),
                 },
             },
         ];
@@ -98,6 +104,7 @@ describe('/api/vehicles', () => {
                     speed: 0,
                     lat: -23,
                     lon: 1,
+                    eventTime: new Date().toISOString(),
                 },
                 expected: 400,
             },
@@ -108,6 +115,7 @@ describe('/api/vehicles', () => {
                     speed: -1,
                     lat: -23,
                     lon: 1,
+                    eventTime: new Date().toISOString(),
                 },
                 expected: 400,
             },
@@ -118,6 +126,7 @@ describe('/api/vehicles', () => {
                     speed: 100,
                     lat: -23,
                     lon: 181,
+                    eventTime: new Date().toISOString(),
                 },
                 expected: 400,
             },
@@ -128,6 +137,7 @@ describe('/api/vehicles', () => {
                     speed: 55,
                     lat: -91,
                     lon: 10,
+                    eventTime: new Date().toISOString(),
                 },
                 expected: 400,
             },
@@ -138,6 +148,7 @@ describe('/api/vehicles', () => {
                     speed: true,
                     lat: -15,
                     lon: 10,
+                    eventTime: new Date().toISOString(),
                 },
                 expected: 400,
             },
@@ -148,6 +159,7 @@ describe('/api/vehicles', () => {
                     speed: 25,
                     lat: [93],
                     lon: 10,
+                    eventTime: new Date().toISOString(),
                 },
                 expected: 400,
             },
@@ -158,6 +170,7 @@ describe('/api/vehicles', () => {
                     speed: 25,
                     lat: 55,
                     lon: "100a",
+                    eventTime: new Date().toISOString(),
                 },
                 expected: 400,
             },
@@ -168,6 +181,28 @@ describe('/api/vehicles', () => {
                     speed: 25,
                     lat: 55,
                     lon: 100,
+                    eventTime: new Date().toISOString(),
+                },
+                expected: 400,
+            },
+            {
+                caseName: 'No event time',
+                body: {
+                    vehicleId: "123e4567-e89b-12d3-a456-426614174000",
+                    speed: 25,
+                    lat: 55,
+                    lon: 100,
+                },
+                expected: 400,
+            },
+            {
+                caseName: 'Invalid event time type',
+                body: {
+                    vehicleId: "123e4567-e89b-12d3-a456-426614174000",
+                    speed: 25,
+                    lat: 55,
+                    lon: 100,
+                    eventTime: true
                 },
                 expected: 400,
             },

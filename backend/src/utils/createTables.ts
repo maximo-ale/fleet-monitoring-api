@@ -10,7 +10,8 @@ export const createTables = async() => {
             vehicle_id UUID,
             position geography(POINT, 4326) NOT NULL,
             speed DOUBLE PRECISION NOT NULL,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            event_time TIMESTAMPTZ NOT NULL
         );
     `);
 
