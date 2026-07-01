@@ -24,8 +24,8 @@ DB_NAME=pg_db
 RESET_DB=false
 ```
 
-`RESET_DB=true` drops the `vehicle_positions` table on startup and then creates
-it again. Use it only when you want to reset the current data structure.
+`RESET_DB=true` clears the current database tables on startup after ensuring
+they exist. Use it only when you want to reset the current data.
 
 ## Local Installation
 
@@ -66,7 +66,7 @@ On startup, the application:
 - Loads environment variables.
 - Connects to PostgreSQL.
 - Creates the `postgis` and `pgcrypto` extensions if they do not exist.
-- Creates the `vehicle_positions` table if it does not exist.
+- Creates the required vehicle position tables if they do not exist.
 - Exposes the API on the port defined by `PORT`.
 
 ## Run Tests
@@ -108,8 +108,8 @@ npm run simulate
 The current script targets:
 
 - API URL: `http://localhost:3000/api/vehicles/positions`
-- Target rate: `725` requests per second
-- Duration: `60` seconds
+- Target rate: `500` requests per second
+- Duration: `300` seconds
 - Dispatch tick: `100` milliseconds
 - Max in-flight requests: `5000`
 
@@ -131,10 +131,11 @@ At the end it prints a benchmark summary with:
 - Average latency.
 
 The simulator generates requests with valid UUIDs, random longitude and
-latitude values within the accepted API ranges, and random speed values. It
-currently measures only ingestion throughput for `POST /api/vehicles/positions`;
-it does not exercise future speed alerts, route validation, geofencing, or
-other domain rules.
+latitude values within the accepted API ranges, random speed values, and an
+`eventTime` timestamp serialized as an ISO date/time string. It currently
+measures only ingestion throughput for `POST /api/vehicles/positions`; it does
+not exercise future speed alerts, route validation, geofencing, delayed events,
+out-of-order events, or other domain rules.
 
 ## Run with Docker
 
