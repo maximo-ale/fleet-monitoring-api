@@ -35,7 +35,8 @@ Registers one position in the `vehicle_positions` table.
   "vehicleId": "550e8400-e29b-41d4-a716-446655440000",
   "speed": 42.5,
   "lon": -58.3816,
-  "lat": -34.6037
+  "lat": -34.6037,
+  "eventTime": "2026-06-06T12:00:00.000Z"
 }
 ```
 
@@ -45,6 +46,7 @@ Registers one position in the `vehicle_positions` table.
 - `speed`: number greater than or equal to `0`.
 - `lon`: number between `-180` and `180`.
 - `lat`: number between `-90` and `90`.
+- `eventTime`: valid ISO date/time string.
 
 `lon` and `lat` use Zod numeric coercion, so numeric strings can be converted
 to numbers during validation.
@@ -66,13 +68,15 @@ Body:
     "lon": -58.3816,
     "lat": -34.6037,
     "speed": 42.5,
+    "eventTime": "2026-06-06T12:00:00.000Z",
     "createdAt": "2026-06-06T12:00:00.000Z"
   }
 }
 ```
 
 The position is stored in PostgreSQL/PostGIS using `ST_MakePoint(lon, lat)`
-with SRID `4326`.
+with SRID `4326`. The event timestamp is stored as `event_time`, separately
+from the database-generated `created_at` timestamp.
 
 ### Validation Error
 

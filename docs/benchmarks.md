@@ -28,7 +28,7 @@ POST /api/vehicles/positions
 - Target rate: `10` events per second.
 - Expected total events: `600`.
 - Payloads: generated vehicle position events with valid UUIDs, longitude,
-  latitude, and speed values.
+  latitude, speed, and event timestamp values.
 - Persistence: each accepted request is inserted into `vehicle_positions`.
 
 ### Acceptance Criteria

@@ -8,10 +8,10 @@ HTTP request, validates the data, and writes directly to PostgreSQL/PostGIS.
 - `backend/src/server.ts`: initializes Express, loads environment variables,
   prepares the database, registers routes, and mounts the error middleware.
 - `backend/src/config/dbConfig.ts`: creates the PostgreSQL connection pool.
-- `backend/src/utils/createTables.ts`: creates extensions and the
-  `vehicle_positions` table.
-- `backend/src/utils/dropTables.ts`: drops the current table when
-  `RESET_DB=true`.
+- `backend/src/utils/createTables.ts`: creates extensions and the required
+  vehicle position tables.
+- `backend/src/utils/dropTables.ts`: clears the current tables when
+  `RESET_DB=true` or tests/simulator reset data.
 - `backend/src/middlewares/schemaValidator.ts`: validates requests with Zod.
 - `backend/src/middlewares/errorHandler.ts`: centralizes error responses.
 - `backend/src/models/health`: exposes `GET /api/health`.
@@ -39,7 +39,8 @@ HTTP request, validates the data, and writes directly to PostgreSQL/PostGIS.
 The simulator is a local load-generation script for the ingestion endpoint.
 
 1. The script clears the `vehicle_positions` table.
-2. It generates random vehicle position payloads using known vehicle UUIDs.
+2. It generates random vehicle position payloads using known vehicle UUIDs and
+   a current event timestamp.
 3. It schedules requests according to the configured target events per second.
 4. It sends `POST /api/vehicles/positions` requests to the local API.
 5. It tracks attempted, sent, successful, failed, in-flight, and dropped
@@ -62,7 +63,18 @@ Columns:
 - `vehicle_id`: vehicle UUID.
 - `position`: geographic point as `geography(POINT, 4326)`.
 - `speed`: speed as `DOUBLE PRECISION`.
-- `created_at`: timestamp with time zone.
+- `event_time`: vehicle event timestamp with time zone.
+- `created_at`: database insertion timestamp with time zone.
+
+Table: `vehicle_last_state`
+
+Columns:
+
+- `vehicle_id`: unique vehicle UUID.
+- `position`: latest geographic point as `geography(POINT, 4326)`.
+- `speed`: latest speed as `DOUBLE PRECISION`.
+- `last_state_time`: latest vehicle event timestamp with time zone.
+- `updated_at`: latest-state row update timestamp with time zone.
 
 ## Database
 
@@ -71,6 +83,7 @@ On startup, the application creates the following if needed:
 - `postgis` extension.
 - `pgcrypto` extension.
 - `vehicle_positions` table.
+- `vehicle_last_state` table.
 
 This allows the initial version to run without external migrations.
 

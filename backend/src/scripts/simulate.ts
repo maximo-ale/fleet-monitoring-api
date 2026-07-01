@@ -109,6 +109,7 @@ const createVehicle = (): CreatePosition => {
         lon: randomLon(),
         lat: randomLat(),
         speed: randomSpeed(),
+        eventTime: new Date(),
     }
 }
 
