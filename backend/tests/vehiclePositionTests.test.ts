@@ -3,12 +3,14 @@ import request from 'supertest';
 
 import app from '../src/app';
 import { cleanTables } from '../src/utils/dropTables';
+import pool from '../src/config/dbConfig';
+import { getLastState, getResponses, getVehiclePositions } from './helper';
 
 const prefix = '/api/vehicles';
 
 type UUID = string;
 
-interface ValidVehicleBody {
+export interface ValidVehicleBody {
     vehicleId: UUID,
     speed: number,
     lat: number,
@@ -26,7 +28,9 @@ interface InvalidVehicleBody {
 
 interface ValidCreatePosition {
     caseName: string,
-    body: ValidVehicleBody,
+    requests: ValidVehicleBody[],
+    validExpected: number,
+    invalidExpected: number,
 }
 
 interface InvalidCreatePosition {
@@ -44,52 +48,81 @@ describe('/api/vehicles', () => {
         const validTestCases: ValidCreatePosition[] = [
             {
                 caseName: 'Valid data 1',
-                body: {
-                    vehicleId: "123e4567-e89b-12d3-a456-426614174000",
-                    speed: 50,
-                    lat: 30,
-                    lon: 30,
-                    eventTime: new Date().toISOString(),
-                },
+                requests: [
+                    {
+                        vehicleId: "123e4567-e89b-12d3-a456-426614174000",
+                        speed: 50,
+                        lat: 30,
+                        lon: 30,
+                        eventTime: new Date().toISOString(),
+                    }
+                ],
+                validExpected: 1,
+                invalidExpected: 0,
             },
             {
                 caseName: 'Valid data 2',
-                body: {
-                    vehicleId: "123e4567-e89b-12d3-a456-426614174000",
-                    speed: 50,
-                    lat: -30,
-                    lon: 30.312,
-                    eventTime: new Date().toISOString(),
-                },
+                requests: [
+                    {
+                        vehicleId: "123e4567-e89b-12d3-a456-426614174000",
+                        speed: 50,
+                        lat: -30,
+                        lon: 30.312,
+                        eventTime: new Date().toISOString(),
+                    }
+                ],
+                validExpected: 1,
+                invalidExpected: 0,
             },
             {
                 caseName: 'Valid data 3',
-                body: {
-                    vehicleId: "123e4567-e89b-12d3-a456-426614174000",
-                    speed: 50,
-                    lat: -90,
-                    lon: 180,
-                    eventTime: new Date().toISOString(),
-                },
+                requests: [
+                    {
+                        vehicleId: "123e4567-e89b-12d3-a456-426614174000",
+                        speed: 50,
+                        lat: -90,
+                        lon: 180,
+                        eventTime: new Date().toISOString(),
+                    }
+                ],
+                validExpected: 1,
+                invalidExpected: 0,
             },
             {
                 caseName: 'Valid data 4',
-                body: {
-                    vehicleId: "123e4567-e89b-12d3-a456-426614174000",
-                    speed: 0,
-                    lat: -23,
-                    lon: 1,
-                    eventTime: new Date().toISOString(),
-                },
+                requests: [
+                    {
+                        vehicleId: "123e4567-e89b-12d3-a456-426614174000",
+                        speed: 0,
+                        lat: -23,
+                        lon: 1,
+                        eventTime: new Date().toISOString(),
+                    }
+                ],
+                validExpected: 1,
+                invalidExpected: 0,
             },
         ];
 
-        it.each(validTestCases)('$caseName', async({ body }) => {
-            const res = await request(app)
-                .post(`${prefix}/positions`)
-                .send(body)
+        it.each(validTestCases)('$caseName', async({ requests, validExpected, invalidExpected }) => {
+            const reqs = [];
 
-            expect(res.status).toBe(201);
+            for (let i = 0; i < requests.length; i++){
+                reqs[i] = request(app)
+                    .post(`${prefix}/positions`)
+                    .send(requests[i]);
+            }
+            
+            console.log(`reqs.length---------------------- ${reqs.length}`);
+
+            const responses = await Promise.all(reqs);
+
+            const valid = responses.filter(res => res.status === 201);
+            const invalid = responses.filter(res => res.status >= 400);
+
+            expect(valid.length).toBe(validExpected);
+            expect(invalid.length).toBe(invalidExpected);
+
         });
 
         const invalidTestCases: InvalidCreatePosition[] = [
@@ -208,12 +241,78 @@ describe('/api/vehicles', () => {
             },
         ];
 
-         it.each(invalidTestCases)('$caseName', async({ body, expected }) => {
+        it.each(invalidTestCases)('$caseName', async({ body, expected }) => {
             const res = await request(app)
                 .post(`${prefix}/positions`)
                 .send(body)
 
             expect(res.status).toBe(expected);
         });
-    })
+    });
+
+    describe('latest vehicle state', () => {
+        it('creates latest state after first valid event', async() => {
+            const vehicles = [
+                {
+                    vehicleId: "123e4567-e89b-12d3-a456-426614174000",
+                    speed: 50,
+                    lat: 30,
+                    lon: 30,
+                    eventTime: '2026-07-04T10:00:00.000Z',
+                },
+            ];
+
+            const responses: any = await getResponses(vehicles, prefix);
+
+            for (let i = 0; i < responses.length; i++){
+                expect(responses[i].status).toBe(201);
+            }
+            
+            const vehiclePositionsRes = await getVehiclePositions();
+            const lastStateRes = await getLastState();
+
+            expect(vehiclePositionsRes.rows.length).toBe(1);
+            expect(lastStateRes.rows.length).toBe(1);
+            
+            expect(vehiclePositionsRes.rows[0].vehicleId).toBe(vehicles[0].vehicleId);
+            expect(lastStateRes.rows[0].vehicleId).toBe(vehicles[0].vehicleId);
+        });
+
+        it('updates latest state after second event from same vehicle', async() => {
+            const vehicles = [
+                {
+                    vehicleId: "123e4567-e89b-12d3-a456-426614174000",
+                    speed: 50,
+                    lat: 30,
+                    lon: 30,
+                    eventTime: '2026-07-04T10:00:00.000Z',
+                },
+                {
+                    vehicleId: "123e4567-e89b-12d3-a456-426614174000",
+                    speed: 60,
+                    lat: 30.23,
+                    lon: 28.111,
+                    eventTime: '2026-07-04T10:01:00.000Z',
+                }
+            ];
+            
+            const responses: any = await getResponses(vehicles, prefix);
+
+            for (let i = 0; i < responses.length; i++){
+                expect(responses[i].status).toBe(201);
+            }
+            
+            const vehiclePositionsRes = await getVehiclePositions();
+            const lastStateRes = await getLastState();
+
+            expect(vehiclePositionsRes.rows.length).toBe(2);
+            expect(lastStateRes.rows.length).toBe(1);
+            
+            expect(vehiclePositionsRes.rows[0].vehicleId).toBe(vehicles[0].vehicleId);
+            expect(lastStateRes.rows[0].vehicleId).toBe(vehicles[1].vehicleId);
+            expect(lastStateRes.rows[0].speed).toBe(vehicles[1].speed);
+            expect(new Date(lastStateRes.rows[0].lastStateTime).toISOString())
+                .toBe(vehicles[1].eventTime);
+        });
+    });
 });
