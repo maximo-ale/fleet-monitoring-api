@@ -14,7 +14,7 @@ export const createTables = async() => {
             event_time TIMESTAMPTZ NOT NULL
         );
     `);
-
+    
     await pool.query(`
         CREATE TABLE IF NOT EXISTS vehicle_last_state (
             vehicle_id uuid NOT NULL UNIQUE,
