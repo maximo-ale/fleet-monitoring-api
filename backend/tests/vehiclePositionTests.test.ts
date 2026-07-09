@@ -315,4 +315,95 @@ describe('/api/vehicles', () => {
                 .toBe(vehicles[1].eventTime);
         });
     });
+
+    describe('speed limit alerts', () => {
+        const testCases = [
+            {
+                caseName: 'generates speed alert only when speed is above limit',
+                vehicles: [
+                    {
+                        vehicleId: "123e4567-e89b-12d3-a456-426614174000",
+                        speed: 140,
+                        lat: 30,
+                        lon: 30,
+                        eventTime: '2026-07-04T10:00:00.000Z',
+                    },
+                    {
+                        vehicleId: "512e4567-e89b-12d3-a456-426614174000",
+                        speed: 120,
+                        lat: 30.23,
+                        lon: 30.15,
+                        eventTime: '2026-07-04T10:01:00.000Z',
+                    },
+                    {
+                        vehicleId: "612e4567-e89b-12d3-a456-426614174000",
+                        speed: 80,
+                        lat: 29.18,
+                        lon: 31.2,
+                        eventTime: '2026-07-04T10:02:00.000Z',
+                    },
+                ],
+                vehiclesToGenerateAlerts: [
+                    {
+                        vehicleId: "123e4567-e89b-12d3-a456-426614174000",
+                        alertType: 'SPEED_LIMIT_EXCEEDED',
+                        speed: 140,
+                        lat: 30,
+                        lon: 30,
+                        eventTime: '2026-07-04T10:00:00.000Z',
+                    }
+                ],
+            }
+        ];
+    
+        it.each(testCases)('$caseName', async ({ vehicles, vehiclesToGenerateAlerts }) => {
+            for (const vehicle of vehicles) {
+                const response = await request(app)
+                    .post(`${prefix}/positions`)
+                    .send(vehicle);
+            
+                expect(response.status).toBe(201);
+            }
+
+            const vehiclePositionsRes = await getVehiclePositions();
+            const lastStateRes = await getLastState();
+
+            expect(vehiclePositionsRes.rowCount).toBe(vehicles.length);
+            expect(lastStateRes.rowCount).toBe(vehicles.length);
+        
+            const result = await pool.query(`
+                SELECT
+                    vehicle_id "vehicleId",
+                    alert_type "alertType",
+                    speed,
+                    ST_X(position::geometry) lon,
+                    ST_Y(position::geometry) lat,
+                    event_time "eventTime"
+                FROM vehicle_alerts
+                ORDER BY event_time ASC;
+            `);
+            
+            expect(result.rowCount).toBe(vehiclesToGenerateAlerts.length);
+            
+            for (const alert of result.rows) {
+                const expectedAlert = vehiclesToGenerateAlerts.find(vehicle =>
+                    vehicle.vehicleId === alert.vehicleId
+                );
+            
+                expect(expectedAlert).toBeDefined();
+            
+                expect(alert).toEqual(
+                    expect.objectContaining({
+                        vehicleId: expectedAlert!.vehicleId,
+                        alertType: expectedAlert!.alertType,
+                        speed: expectedAlert!.speed,
+                    })
+                );
+            
+                expect(new Date(alert.eventTime).toISOString()).toBe(expectedAlert!.eventTime);
+                expect(Number(alert.lat)).toBeCloseTo(expectedAlert!.lat);
+                expect(Number(alert.lon)).toBeCloseTo(expectedAlert!.lon);
+            }
+        });
+    });
 });

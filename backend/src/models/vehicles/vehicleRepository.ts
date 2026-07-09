@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { CreatePosition, VehicleData } from './vehicleInterface';
+import { CreatePosition, VehicleAlert, VehicleData } from './vehicleInterface';
 import pool from '../../config/dbConfig';
 import { PoolClient } from 'pg';
 
@@ -54,4 +54,25 @@ export const upsertLatestVehicleState = async(client: PoolClient, data: CreatePo
     `, [vehicleId, lon, lat, speed, eventTime]);
 
     return result.rows[0];
+}
+
+export const createVehicleAlert = async(client: PoolClient, data: VehicleAlert): Promise<void> => {
+    const { vehicleId, alertType, speed, lon, lat, eventTime} = data;
+
+    await client.query(`
+        INSERT INTO vehicle_alerts (
+            vehicle_id,
+            alert_type,
+            speed,
+            position,
+            event_time
+        )
+        VALUES (
+            $1,
+            $2,
+            $3,
+            ST_SetSRID(ST_MakePoint($4, $5), 4326)::geography,
+            $6
+        )
+    `, [vehicleId, alertType, speed, lon, lat, eventTime]);
 }
