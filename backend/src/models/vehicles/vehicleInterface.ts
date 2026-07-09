@@ -15,3 +15,12 @@ export interface CreatePosition {
     lon: number,
     eventTime: Date,
 }
+
+export interface VehicleAlert {
+    vehicleId: string,
+    alertType: 'SPEED_LIMIT_EXCEEDED',
+    speed: number,
+    lat: number,
+    lon: number,
+    eventTime: Date,
+}
