@@ -29,10 +29,20 @@ export const createTables = async() => {
         CREATE TABLE IF NOT EXISTS vehicle_alerts (
             id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
             vehicle_id uuid NOT NULL,
-            alert_type TEXT CHECK(alert_type IN ('SPEED_LIMIT_EXCEEDED')) NOT NULL,
+            alert_type TEXT CHECK(alert_type IN ('SPEED_LIMIT_EXCEEDED', 'GEOFENCE_EXIT')) NOT NULL,
             speed DOUBLE PRECISION NOT NULL,
             position geography(POINT, 4326) NOT NULL,
             event_time TIMESTAMPTZ NOT NULL
+        );
+    `);
+
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS geofences (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name VARCHAR(100) NOT NULL,
+            area geometry(POLYGON, 4326) NOT NULL,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
     `);
 

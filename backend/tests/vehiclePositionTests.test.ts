@@ -4,7 +4,8 @@ import request from 'supertest';
 import app from '../src/app';
 import { cleanTables } from '../src/utils/dropTables';
 import pool from '../src/config/dbConfig';
-import { getLastState, getResponses, getVehiclePositions } from './helper';
+import { createGlobalGeofence, getLastState, getResponses, getVehiclePositions } from './helper';
+import { createGeofence } from '../src/models/geofences/geofenceRepository';
 
 const prefix = '/api/vehicles';
 
@@ -37,6 +38,19 @@ interface InvalidCreatePosition {
     caseName: string,
     body?: InvalidVehicleBody
     expected: number,
+}
+
+interface Geofence {
+    name: string,
+    area: number[][],
+    isActive: boolean,
+}
+
+interface GeofenceExitAlerts {
+    caseName: string,
+    geofences: Geofence[],
+    vehicle: ValidVehicleBody,
+    expectAlertToBeCreated: boolean,
 }
 
 describe('/api/vehicles', () => {
@@ -445,6 +459,8 @@ describe('/api/vehicles', () => {
         ];
     
         it.each(testCases)('$caseName', async ({ vehicles, vehiclesToGenerateAlerts }) => {
+            await createGlobalGeofence();
+            
             for (const vehicle of vehicles) {
                 const response = await request(app)
                     .post(`${prefix}/positions`)
@@ -497,6 +513,8 @@ describe('/api/vehicles', () => {
 
     describe('GET /api/alerts', () => {
         it('lists recent alerts newest to oldest', async() => {
+            await createGlobalGeofence();
+
             const vehicles = [
                 {
                     vehicleId: "123e4567-e89b-12d3-a456-426614174000",
@@ -553,6 +571,8 @@ describe('/api/vehicles', () => {
         });
 
         it('respects the optional alerts limit query parameter', async() => {
+            await createGlobalGeofence();
+            
             const vehicles = [
                 {
                     vehicleId: "123e4567-e89b-12d3-a456-426614174000",
@@ -588,4 +608,190 @@ describe('/api/vehicles', () => {
             expect(response.body[1].vehicleId).toBe(vehicles[1].vehicleId);
         });
     });
+
+    describe('Geofence exit alerts', () => {
+        const testCases: GeofenceExitAlerts[] = [
+            {
+                caseName: 'Valid vehicle inside position',
+                geofences: [
+                    {
+                        name: 'Geofence1',
+                        area: [
+                            [50, 50],
+                            [51, 50],
+                            [50, 51],
+                            [51, 51],
+                            [50, 50],
+                        ],
+                        isActive: true,
+                    },
+                ],
+                vehicle: {
+                    vehicleId: '123e4567-e89b-12d3-a456-426614174000',
+                    speed: 50,
+                    lon: 50.5,
+                    lat: 50.5,
+                    eventTime: '2026-01-01T10:02:00.000Z'
+                },
+                expectAlertToBeCreated: false,
+            },
+            {
+                caseName: 'Valid vehicle in edge position',
+                geofences: [
+                    {
+                        name: 'Geofence1',
+                        area: [
+                            [50, 50],
+                            [51, 50],
+                            [50, 51],
+                            [51, 51],
+                            [50, 50],
+                        ],
+                        isActive: true,
+                    },
+                ],
+                vehicle: {
+                    vehicleId: '123e4567-e89b-12d3-a456-426614174000',
+                    speed: 50,
+                    lon: 50.5,
+                    lat: 51,
+                    eventTime: '2026-01-01T10:02:00.000Z'
+                },
+                expectAlertToBeCreated: false,
+            },
+            {
+                caseName: 'Valid vehicle in corner position',
+                geofences: [
+                    {
+                        name: 'Geofence1',
+                        area: [
+                            [50, 50],
+                            [51, 50],
+                            [50, 51],
+                            [51, 51],
+                            [50, 50],
+                        ],
+                        isActive: true,
+                    },
+                ],
+                vehicle: {
+                    vehicleId: '123e4567-e89b-12d3-a456-426614174000',
+                    speed: 50,
+                    lon: 51,
+                    lat: 51,
+                    eventTime: '2026-01-01T10:02:00.000Z'
+                },
+                expectAlertToBeCreated: false,
+            },
+            {
+                caseName: 'Vehicle outside position',
+                geofences: [
+                    {
+                        name: 'Geofence1',
+                        area: [
+                            [50, 50],
+                            [51, 50],
+                            [50, 51],
+                            [51, 51],
+                            [50, 50],
+                        ],
+                        isActive: true,
+                    },
+                ],
+                vehicle: {
+                    vehicleId: '123e4567-e89b-12d3-a456-426614174000',
+                    speed: 50,
+                    lon: 52,
+                    lat: 52,
+                    eventTime: '2026-01-01T10:02:00.000Z'
+                },
+                expectAlertToBeCreated: true,
+            },
+            {
+                caseName: 'Vehicle inside an inactive geofence',
+                geofences: [
+                    {
+                        name: 'Geofence1',
+                        area: [
+                            [50, 50],
+                            [51, 50],
+                            [50, 51],
+                            [51, 51],
+                            [50, 50],
+                        ],
+                        isActive: false,
+                    },
+                ],
+                vehicle: {
+                    vehicleId: '123e4567-e89b-12d3-a456-426614174000',
+                    speed: 50,
+                    lon: 50.5,
+                    lat: 50.5,
+                    eventTime: '2026-01-01T10:02:00.000Z'
+                },
+                expectAlertToBeCreated: true,
+            },
+            {
+                caseName: 'Vehicle inside in both an inactive and an active geofence at the same time',
+                geofences: [
+                    {
+                        name: 'Geofence1',
+                        area: [
+                            [50, 50],
+                            [50, 60],
+                            [60, 50],
+                            [60, 60],
+                            [50, 50],
+                        ],
+                        isActive: false,
+                    },
+                    {
+                        name: 'Geofence2',
+                        area: [
+                            [55, 55],
+                            [55, 65],
+                            [65, 55],
+                            [65, 65],
+                            [55, 55],
+                        ],
+                        isActive: true,
+                    },
+                ],
+                vehicle: {
+                    vehicleId: '123e4567-e89b-12d3-a456-426614174000',
+                    speed: 50,
+                    lon: 57.5,
+                    lat: 57.5,
+                    eventTime: '2026-01-01T10:02:00.000Z'
+                },
+                expectAlertToBeCreated: false,
+            },
+        ];
+
+        it.each(testCases)('$caseName', async({ geofences, vehicle, expectAlertToBeCreated }) => {
+            for (let i = 0; i < geofences.length; i++){
+                await createGeofence(geofences[i]);
+            }
+
+            const res = await request(app)
+                .post(`${prefix}/positions`)
+                .send(vehicle);
+
+            expect(res.status).toBe(201);
+
+            const alerts = await pool.query(`
+                SELECT vehicle_id "vehicleId"
+                FROM vehicle_alerts
+                WHERE alert_type = 'GEOFENCE_EXIT'
+            `);
+
+            if (expectAlertToBeCreated){
+                expect(alerts.rowCount).toBe(1);
+                expect(alerts.rows[0].vehicleId).toBe(vehicle.vehicleId);
+            } else {
+                expect(alerts.rowCount).toBe(0);
+            }
+        })
+    });
 });
+    

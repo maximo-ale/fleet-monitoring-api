@@ -1,5 +1,6 @@
 import app from "../src/app";
 import pool from "../src/config/dbConfig";
+import { createGeofence } from "../src/models/geofences/geofenceRepository";
 import { ValidVehicleBody } from "./vehiclePositionTests.test";
 import request from 'supertest';
 
@@ -33,4 +34,19 @@ export const getResponses = async(vehicles: ValidVehicleBody[], prefix: string) 
     }
 
     return responses;
+}
+
+// Creates global geofence to avoid alerts
+export const createGlobalGeofence = async() => {
+    await createGeofence({
+        name: 'Global geofence',
+        area: [
+            [-179, -89],
+            [179, -89],
+            [179, 89],
+            [-179, 89],
+            [-179, -89],
+        ],
+        isActive: true,
+    });
 }
