@@ -1,7 +1,8 @@
 import { PoolClient } from 'pg';
 import pool from '../../config/dbConfig';
 import { envConfig } from '../../config/envConfig';
-import { CreatePosition, VehicleData } from './vehicleInterface';
+import { NotFoundError } from '../../utils/errors';
+import { CreatePosition, LatestVehicleState, VehicleData } from './vehicleInterface';
 import * as vehicleRepository from './vehicleRepository';
 
 export const saveVehiclePosition = async(data: CreatePosition): Promise<VehicleData> => {
@@ -31,6 +32,32 @@ export const saveVehiclePosition = async(data: CreatePosition): Promise<VehicleD
     } catch (err) {
         await client.query('ROLLBACK');
         throw err;
+    } finally {
+        client.release();
+    }
+}
+
+export const getLatestVehicleStates = async(): Promise<LatestVehicleState[]> => {
+    const client: PoolClient = await pool.connect();
+
+    try {
+        return await vehicleRepository.getLatestVehicleStates(client);
+    } finally {
+        client.release();
+    }
+}
+
+export const getLatestVehicleState = async(vehicleId: string): Promise<LatestVehicleState> => {
+    const client: PoolClient = await pool.connect();
+
+    try {
+        const latestState = await vehicleRepository.getLatestVehicleState(client, vehicleId);
+
+        if (!latestState) {
+            throw new NotFoundError('Latest vehicle state not found');
+        }
+
+        return latestState;
     } finally {
         client.release();
     }

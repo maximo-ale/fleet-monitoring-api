@@ -52,7 +52,8 @@ represent the final backend capacity once additional domain behavior is added.
 ### Observed Limitations
 
 - The benchmark measures only the ingestion path.
-- The API does not yet evaluate speed alerts.
+- Speed limit alert evaluation now runs in the ingestion transaction, but this
+  benchmark does not measure alert delivery or downstream alert workflows.
 - The API does not yet validate whether a vehicle is inside an allowed position
   or geofence.
 - The API does not yet run route checks or other PostGIS-heavy domain rules.

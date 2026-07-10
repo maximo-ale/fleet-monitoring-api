@@ -314,6 +314,94 @@ describe('/api/vehicles', () => {
             expect(new Date(lastStateRes.rows[0].lastStateTime).toISOString())
                 .toBe(vehicles[1].eventTime);
         });
+
+        it('lists all latest vehicle states', async() => {
+            const vehicles = [
+                {
+                    vehicleId: "123e4567-e89b-12d3-a456-426614174000",
+                    speed: 50,
+                    lat: 30,
+                    lon: 30,
+                    eventTime: '2026-07-04T10:00:00.000Z',
+                },
+                {
+                    vehicleId: "512e4567-e89b-12d3-a456-426614174000",
+                    speed: 60,
+                    lat: 30.23,
+                    lon: 28.111,
+                    eventTime: '2026-07-04T10:01:00.000Z',
+                },
+            ];
+
+            await getResponses(vehicles, prefix);
+
+            const response = await request(app)
+                .get(`${prefix}/latest`);
+
+            expect(response.status).toBe(200);
+            expect(response.body).toHaveLength(vehicles.length);
+            expect(response.body).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining({
+                        vehicleId: vehicles[0].vehicleId,
+                        speed: vehicles[0].speed,
+                    }),
+                    expect.objectContaining({
+                        vehicleId: vehicles[1].vehicleId,
+                        speed: vehicles[1].speed,
+                    }),
+                ])
+            );
+        });
+
+        it('gets one vehicle latest state by vehicle id', async() => {
+            const vehicles = [
+                {
+                    vehicleId: "123e4567-e89b-12d3-a456-426614174000",
+                    speed: 50,
+                    lat: 30,
+                    lon: 30,
+                    eventTime: '2026-07-04T10:00:00.000Z',
+                },
+                {
+                    vehicleId: "512e4567-e89b-12d3-a456-426614174000",
+                    speed: 60,
+                    lat: 30.23,
+                    lon: 28.111,
+                    eventTime: '2026-07-04T10:01:00.000Z',
+                },
+            ];
+
+            await getResponses(vehicles, prefix);
+
+            const response = await request(app)
+                .get(`${prefix}/${vehicles[1].vehicleId}/latest`);
+
+            expect(response.status).toBe(200);
+            expect(response.body).toEqual(
+                expect.objectContaining({
+                    vehicleId: vehicles[1].vehicleId,
+                    speed: vehicles[1].speed,
+                })
+            );
+            expect(new Date(response.body.eventTime).toISOString()).toBe(vehicles[1].eventTime);
+            expect(Number(response.body.lat)).toBeCloseTo(vehicles[1].lat);
+            expect(Number(response.body.lon)).toBeCloseTo(vehicles[1].lon);
+        });
+
+        it('returns 404 when a vehicle has no latest state', async() => {
+            const response = await request(app)
+                .get(`${prefix}/123e4567-e89b-12d3-a456-426614174000/latest`);
+
+            expect(response.status).toBe(404);
+        });
+
+        it('rejects invalid vehicle ids', async() => {
+            const response = await request(app)
+                .get(`${prefix}/invalid-vehicle-id/latest`);
+
+            expect(response.status).toBe(400);
+        });
     });
 
     describe('speed limit alerts', () => {
@@ -404,6 +492,100 @@ describe('/api/vehicles', () => {
                 expect(Number(alert.lat)).toBeCloseTo(expectedAlert!.lat);
                 expect(Number(alert.lon)).toBeCloseTo(expectedAlert!.lon);
             }
+        });
+    });
+
+    describe('GET /api/alerts', () => {
+        it('lists recent alerts newest to oldest', async() => {
+            const vehicles = [
+                {
+                    vehicleId: "123e4567-e89b-12d3-a456-426614174000",
+                    speed: 140,
+                    lat: 30,
+                    lon: 30,
+                    eventTime: '2026-07-04T10:00:00.000Z',
+                },
+                {
+                    vehicleId: "512e4567-e89b-12d3-a456-426614174000",
+                    speed: 130,
+                    lat: 30.23,
+                    lon: 30.15,
+                    eventTime: '2026-07-04T10:02:00.000Z',
+                },
+                {
+                    vehicleId: "612e4567-e89b-12d3-a456-426614174000",
+                    speed: 80,
+                    lat: 29.18,
+                    lon: 31.2,
+                    eventTime: '2026-07-04T10:01:00.000Z',
+                },
+            ];
+
+            await getResponses(vehicles, prefix);
+
+            const response = await request(app)
+                .get('/api/alerts');
+
+            expect(response.status).toBe(200);
+            expect(response.body).toHaveLength(2);
+            expect(response.body[0]).toEqual(
+                expect.objectContaining({
+                    vehicleId: vehicles[1].vehicleId,
+                    alertType: 'SPEED_LIMIT_EXCEEDED',
+                    speed: vehicles[1].speed,
+                })
+            );
+            expect(response.body[1]).toEqual(
+                expect.objectContaining({
+                    vehicleId: vehicles[0].vehicleId,
+                    alertType: 'SPEED_LIMIT_EXCEEDED',
+                    speed: vehicles[0].speed,
+                })
+            );
+        });
+
+        it('returns an empty array when there are no alerts', async() => {
+            const response = await request(app)
+                .get('/api/alerts');
+
+            expect(response.status).toBe(200);
+            expect(response.body).toEqual([]);
+        });
+
+        it('respects the optional alerts limit query parameter', async() => {
+            const vehicles = [
+                {
+                    vehicleId: "123e4567-e89b-12d3-a456-426614174000",
+                    speed: 140,
+                    lat: 30,
+                    lon: 30,
+                    eventTime: '2026-07-04T10:00:00.000Z',
+                },
+                {
+                    vehicleId: "512e4567-e89b-12d3-a456-426614174000",
+                    speed: 130,
+                    lat: 30.23,
+                    lon: 30.15,
+                    eventTime: '2026-07-04T10:01:00.000Z',
+                },
+                {
+                    vehicleId: "612e4567-e89b-12d3-a456-426614174000",
+                    speed: 150,
+                    lat: 29.18,
+                    lon: 31.2,
+                    eventTime: '2026-07-04T10:02:00.000Z',
+                },
+            ];
+
+            await getResponses(vehicles, prefix);
+
+            const response = await request(app)
+                .get('/api/alerts?limit=2');
+
+            expect(response.status).toBe(200);
+            expect(response.body).toHaveLength(2);
+            expect(response.body[0].vehicleId).toBe(vehicles[2].vehicleId);
+            expect(response.body[1].vehicleId).toBe(vehicles[1].vehicleId);
         });
     });
 });

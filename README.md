@@ -35,6 +35,7 @@ Implemented:
 - Automated API test setup with Jest and Supertest.
 - Vehicle position ingestion simulator.
 - Fixed-rate ingestion benchmark metrics.
+- Speed limit alert persistence for positions above the configured limit.
 - Dockerfile for the backend.
 - Docker Compose setup for PostgreSQL/PostGIS.
 
@@ -43,9 +44,11 @@ Not implemented yet:
 - Message broker.
 - Workers.
 - Bulk inserts.
-- Speed alerts.
 - Position validity checks or geofencing rules.
-- Alert system.
+- Geofence alerts.
+- Alert notifications.
+- Alert acknowledgement or resolution.
+- Per-vehicle speed limits.
 - Authentication.
 
 ## Documentation

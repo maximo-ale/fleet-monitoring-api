@@ -8,6 +8,15 @@ export interface VehicleData {
     eventTime: string,
 }
 
+export interface LatestVehicleState {
+    vehicleId: string,
+    lat: number,
+    lon: number,
+    speed: number,
+    eventTime: string,
+    updatedAt: Date,
+}
+
 export interface CreatePosition {
     vehicleId: string,
     speed: number,

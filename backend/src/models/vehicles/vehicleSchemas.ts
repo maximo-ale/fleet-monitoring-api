@@ -13,3 +13,7 @@ export const createPositionSchema = z.object({
         .max(90),
     eventTime: z.iso.datetime()
 });
+
+export const vehicleIdParamSchema = z.object({
+    vehicleId: z.uuid(),
+});
