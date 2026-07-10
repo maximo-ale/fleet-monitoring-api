@@ -27,7 +27,21 @@ export const saveVehiclePosition = async(data: CreatePosition): Promise<VehicleD
             });
         }
 
+        const isInValidPosition: boolean = await vehicleRepository.isVehicleInValidPosition(client, lon, lat);
+
+        if (!isInValidPosition){
+            await vehicleRepository.createVehicleAlert(client, {
+                vehicleId,
+                alertType: 'GEOFENCE_EXIT',
+                speed,
+                lon,
+                lat,
+                eventTime
+            });
+        }
+
         await client.query('COMMIT');
+
         return newPosition;
     } catch (err) {
         await client.query('ROLLBACK');

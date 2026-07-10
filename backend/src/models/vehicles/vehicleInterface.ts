@@ -27,7 +27,7 @@ export interface CreatePosition {
 
 export interface VehicleAlert {
     vehicleId: string,
-    alertType: 'SPEED_LIMIT_EXCEEDED',
+    alertType: 'SPEED_LIMIT_EXCEEDED' | 'GEOFENCE_EXIT',
     speed: number,
     lat: number,
     lon: number,

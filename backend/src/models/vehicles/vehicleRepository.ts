@@ -4,6 +4,7 @@ import { PoolClient } from 'pg';
 export const createPosition = async(client: PoolClient, data: CreatePosition): Promise<VehicleData> => {
     const { vehicleId, speed, lon, lat, eventTime } = data;
 
+    console.log(`:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::DATA: ${JSON.stringify(data, null, 2)}`);
     const result = await client.query(`
         INSERT INTO vehicle_positions (vehicle_id, position, speed, created_at, event_time)
         VALUES (
@@ -89,6 +90,22 @@ export const getLatestVehicleStates = async(client: PoolClient): Promise<LatestV
     `);
 
     return result.rows;
+}
+
+export const isVehicleInValidPosition = async(client: PoolClient, lon: number, lat: number) => {
+    const res = await client.query(`
+        SELECT EXISTS (
+            SELECT 1
+            FROM geofences
+            WHERE is_active
+                AND ST_Covers(
+                    area,
+                    ST_SetSRID(ST_MakePoint($1, $2), 4326)
+                )
+        ) AS is_active
+    `, [lon, lat]);
+
+    return res.rows[0].is_active;
 }
 
 export const getLatestVehicleState = async(client: PoolClient, vehicleId: string): Promise<LatestVehicleState | null> => {
