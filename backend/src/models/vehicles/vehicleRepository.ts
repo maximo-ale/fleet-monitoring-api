@@ -1,6 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
-import { CreatePosition, VehicleAlert, VehicleData } from './vehicleInterface';
-import pool from '../../config/dbConfig';
+import { CreatePosition, LatestVehicleState, VehicleAlert, VehicleData } from './vehicleInterface';
 import { PoolClient } from 'pg';
 
 export const createPosition = async(client: PoolClient, data: CreatePosition): Promise<VehicleData> => {
@@ -75,4 +73,36 @@ export const createVehicleAlert = async(client: PoolClient, data: VehicleAlert):
             $6
         )
     `, [vehicleId, alertType, speed, lon, lat, eventTime]);
+}
+
+export const getLatestVehicleStates = async(client: PoolClient): Promise<LatestVehicleState[]> => {
+    const result = await client.query(`
+        SELECT
+            vehicle_id "vehicleId",
+            ST_X(position::geometry) "lon",
+            ST_Y(position::geometry) "lat",
+            speed,
+            last_state_time "eventTime",
+            updated_at "updatedAt"
+        FROM vehicle_last_state
+        ORDER BY last_state_time DESC;
+    `);
+
+    return result.rows;
+}
+
+export const getLatestVehicleState = async(client: PoolClient, vehicleId: string): Promise<LatestVehicleState | null> => {
+    const result = await client.query(`
+        SELECT
+            vehicle_id "vehicleId",
+            ST_X(position::geometry) "lon",
+            ST_Y(position::geometry) "lat",
+            speed,
+            last_state_time "eventTime",
+            updated_at "updatedAt"
+        FROM vehicle_last_state
+        WHERE vehicle_id = $1;
+    `, [vehicleId]);
+
+    return result.rows[0] ?? null;
 }

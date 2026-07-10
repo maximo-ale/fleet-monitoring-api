@@ -27,6 +27,9 @@ Content-Type: application/json
 ```
 
 Registers one position in the `vehicle_positions` table.
+It also updates `vehicle_last_state` and creates a `SPEED_LIMIT_EXCEEDED`
+alert in `vehicle_alerts` when `speed` is greater than the configured
+`SPEED_LIMIT`.
 
 ### Body
 

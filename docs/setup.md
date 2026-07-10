@@ -22,10 +22,15 @@ DB_USERNAME=postgres
 DB_PASSWORD=postgres
 DB_NAME=pg_db
 RESET_DB=false
+SPEED_LIMIT=120
 ```
 
 `RESET_DB=true` clears the current database tables on startup after ensuring
 they exist. Use it only when you want to reset the current data.
+
+`SPEED_LIMIT` configures the speed threshold used for
+`SPEED_LIMIT_EXCEEDED` alerts. Positions with `speed` greater than this value
+create an alert; positions at or below the value do not.
 
 ## Local Installation
 
@@ -66,7 +71,7 @@ On startup, the application:
 - Loads environment variables.
 - Connects to PostgreSQL.
 - Creates the `postgis` and `pgcrypto` extensions if they do not exist.
-- Creates the required vehicle position tables if they do not exist.
+- Creates the required vehicle position and alert tables if they do not exist.
 - Exposes the API on the port defined by `PORT`.
 
 ## Run Tests
@@ -134,7 +139,7 @@ The simulator generates requests with valid UUIDs, random longitude and
 latitude values within the accepted API ranges, random speed values, and an
 `eventTime` timestamp serialized as an ISO date/time string. It currently
 measures only ingestion throughput for `POST /api/vehicles/positions`; it does
-not exercise future speed alerts, route validation, geofencing, delayed events,
+not exercise alert delivery, route validation, geofencing, delayed events,
 out-of-order events, or other domain rules.
 
 ## Run with Docker

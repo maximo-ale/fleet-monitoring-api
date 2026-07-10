@@ -7,6 +7,7 @@ dotenv.config();
 
 import healthRoutes from './models/health/healthRoutes';
 import vehicleRoutes from './models/vehicles/vehicleRoutes';
+import alertRoutes from './models/alerts/alertRoutes';
 
 import { errorHandler } from './middlewares/errorHandler';
 
@@ -25,6 +26,7 @@ app.use(express.json());
 
 app.use('/api', healthRoutes);
 app.use('/api/vehicles', vehicleRoutes);
+app.use('/api/alerts', alertRoutes);
 
 app.use(errorHandler);
 

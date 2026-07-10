@@ -9,7 +9,7 @@ HTTP request, validates the data, and writes directly to PostgreSQL/PostGIS.
   prepares the database, registers routes, and mounts the error middleware.
 - `backend/src/config/dbConfig.ts`: creates the PostgreSQL connection pool.
 - `backend/src/utils/createTables.ts`: creates extensions and the required
-  vehicle position tables.
+  vehicle position and alert tables.
 - `backend/src/utils/dropTables.ts`: clears the current tables when
   `RESET_DB=true` or tests/simulator reset data.
 - `backend/src/middlewares/schemaValidator.ts`: validates requests with Zod.
@@ -30,9 +30,14 @@ HTTP request, validates the data, and writes directly to PostgreSQL/PostGIS.
 3. The validation middleware applies `createPositionSchema`.
 4. If the data is invalid, the API responds with `400`.
 5. If the data is valid, the controller calls the service.
-6. The service delegates persistence to the repository.
-7. The repository executes the `INSERT` in PostgreSQL/PostGIS.
-8. The API responds with `201` and the created position.
+6. The service starts a database transaction.
+7. The repository stores the position event.
+8. The repository upserts the latest vehicle state.
+9. If `speed` is greater than `SPEED_LIMIT`, the repository stores a
+   `SPEED_LIMIT_EXCEEDED` alert with the vehicle, speed, position, and event
+   timestamp.
+10. The service commits the transaction.
+11. The API responds with `201` and the created position.
 
 ## Simulator Flow
 
@@ -50,8 +55,7 @@ The simulator is a local load-generation script for the ingestion endpoint.
 
 This simulator is intended to measure the current direct-ingestion path only.
 It does not represent full backend capacity once additional domain processing
-is added, such as speed alerts, route checks, geofencing, or other PostGIS
-validity checks.
+is added, such as route checks, geofencing, or other PostGIS validity checks.
 
 ## Current Data Model
 
@@ -76,6 +80,18 @@ Columns:
 - `last_state_time`: latest vehicle event timestamp with time zone.
 - `updated_at`: latest-state row update timestamp with time zone.
 
+Table: `vehicle_alerts`
+
+Columns:
+
+- `id`: UUID generated with `gen_random_uuid()`.
+- `vehicle_id`: vehicle UUID related to the alert.
+- `alert_type`: alert type. The current supported value is
+  `SPEED_LIMIT_EXCEEDED`.
+- `speed`: speed reported by the vehicle event.
+- `position`: geographic point as `geography(POINT, 4326)`.
+- `event_time`: vehicle event timestamp with time zone.
+
 ## Database
 
 On startup, the application creates the following if needed:
@@ -84,6 +100,7 @@ On startup, the application creates the following if needed:
 - `pgcrypto` extension.
 - `vehicle_positions` table.
 - `vehicle_last_state` table.
+- `vehicle_alerts` table.
 
 This allows the initial version to run without external migrations.
 
@@ -101,9 +118,10 @@ Any other error is returned as `500 Internal server error`.
 - There is no message broker or asynchronous processing.
 - There are no workers.
 - There are no bulk inserts.
-- There are no speed alerts.
 - There are no position validity checks or geofencing rules.
-- There is no alert system.
+- There are no geofence alerts.
+- There are no alert notification, acknowledgement, or resolution workflows.
+- There are no per-vehicle speed limits.
 - The current benchmark script measures ingestion only.
 - There is no formal API versioning.
 - Table creation is embedded in application startup.

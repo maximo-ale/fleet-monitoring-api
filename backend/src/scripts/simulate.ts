@@ -10,9 +10,9 @@ let attempted = 0;
 
 const maxInFlight = 5000;
 
-const requestsPerSecond = 500;
+const requestsPerSecond = 300;
 const tickMs = 100;
-const timeToWork = 300;
+const timeToWork = 30;
 
 const requestsToAttempt = requestsPerSecond * timeToWork;
 
