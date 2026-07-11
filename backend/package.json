@@ -11,7 +11,7 @@
     "dev": "tsx watch src/server.ts",
     "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js",
     "test:watch": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --watch",
-    "simulate": "tsx watch src/scripts/simulate.ts"
+    "simulate": "tsx src/scripts/simulate.ts"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",

@@ -1,6 +1,7 @@
 import { createGeofence } from '../models/geofences/geofenceRepository';
 import { CreatePosition } from '../models/vehicles/vehicleInterface';
 import { cleanTables } from '../utils/dropTables';
+import pool from '../config/dbConfig';
 import dotenv from 'dotenv';
 
 dotenv.config({ quiet: true });
@@ -19,9 +20,9 @@ let geofenceExitAlerts = 0;
 
 const maxInFlight = 5000;
 
-const requestsPerSecond = 230;
+const requestsPerSecond = 550;
 const tickMs = 100;
-const timeToWork = 30;
+const timeToWork = 120;
 
 const requestsToAttempt = requestsPerSecond * timeToWork;
 
@@ -35,7 +36,8 @@ const invalidLon = 20;
 
 const apiUrl: string = 'http://localhost:3000/api/vehicles/positions'; 
 
-let elapsed = 0;
+let loadElapsed = 0;
+let totalElapsed = 0;
 
 let latencies: number[] = [];
 
@@ -110,12 +112,14 @@ const showResults = () => {
 
     console.log('');
     console.log('--------Work Finished--------')
-    console.log(`Time tested: ${Math.floor(elapsed / 1000)}s`);
+    console.log(`Load duration: ${Number((loadElapsed / 1000).toFixed(2))}s`);
+    console.log(`Total duration (including drain): ${Number((totalElapsed / 1000).toFixed(2))}s`);
     console.log('');
-    console.log(`Attempted requests: ${attempted} ${Number((attempted / elapsed * 1000).toFixed(2))}/s`);
-    console.log(`Total requests sent: ${sent} ${Number((sent / elapsed * 1000).toFixed(2))}/s`);
+    console.log(`Attempted requests: ${attempted} ${Number((attempted / loadElapsed * 1000).toFixed(2))}/s during load`);
+    console.log(`Total requests sent: ${sent} ${Number((sent / loadElapsed * 1000).toFixed(2))}/s during load`);
     console.log('');
-    console.log(`Requests succeeded: ${success} ${Number((success / elapsed * 1000).toFixed(2))}/s`);
+    console.log(`Requests succeeded: ${success}`);
+    console.log(`Completion throughput: ${Number(((success + failed) / totalElapsed * 1000).toFixed(2))}/s including drain`);
     console.log('');
     console.log(`Requests failed: ${failed}`);
     console.log(`Requests in flight: ${inFlight}`);
@@ -203,7 +207,7 @@ const main = async() => {
     }, 1000);
 
     const sendRequestsInterval = setInterval(async() => {
-        elapsed = performance.now() - start;
+        const elapsed = performance.now() - start;
 
         const shouldHaveAttempted = Math.min(
             Math.floor((elapsed / 1000) * requestsPerSecond),
@@ -238,14 +242,16 @@ const main = async() => {
                     
                     if (attempted >= requestsToAttempt && inFlight === 0){
                         clearInterval(logsInterval);
-                        elapsed = performance.now() - start;
+                        totalElapsed = performance.now() - start;
                         showResults();
+                        void pool.end();
                     }
                 });
         }
 
         if (elapsed >= timeToWork * 1000){
             clearInterval(sendRequestsInterval);
+            loadElapsed = elapsed;
 
             console.log('------------------------------------------------------');
             console.log(`All requests were attempted`);
