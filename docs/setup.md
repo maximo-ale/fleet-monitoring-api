@@ -26,7 +26,9 @@ SPEED_LIMIT=120
 ```
 
 `RESET_DB=true` clears the current database tables on startup after ensuring
-they exist. Use it only when you want to reset the current data.
+they exist. This truncates `vehicle_positions`, `vehicle_last_state`,
+`vehicle_alerts`, and `geofences`. Use it only when you intend to remove all
+current monitoring and geofence data.
 
 `SPEED_LIMIT` configures the speed threshold used for
 `SPEED_LIMIT_EXCEEDED` alerts. Positions with `speed` greater than this value
@@ -71,7 +73,8 @@ On startup, the application:
 - Loads environment variables.
 - Connects to PostgreSQL.
 - Creates the `postgis` and `pgcrypto` extensions if they do not exist.
-- Creates the required vehicle position and alert tables if they do not exist.
+- Creates the required vehicle position, latest-state, alert, and geofence
+  tables if they do not exist.
 - Exposes the API on the port defined by `PORT`.
 
 ## Run Tests
@@ -101,7 +104,7 @@ the PostgreSQL pool after it finishes.
 
 The backend includes a simulator for sending vehicle position events to the API
 at a fixed target rate. It is useful for testing the current direct-ingestion
-path before adding alerts, geofencing, workers, or other backend behavior.
+path with the current synchronous speed-limit and geofence checks.
 
 Start the database and backend first, then run:
 
@@ -113,15 +116,17 @@ npm run simulate
 The current script targets:
 
 - API URL: `http://localhost:3000/api/vehicles/positions`
-- Target rate: `500` requests per second
-- Duration: `300` seconds
+- Target rate: `230` requests per second
+- Duration: `30` seconds
 - Dispatch tick: `100` milliseconds
 - Max in-flight requests: `5000`
 
-Before starting, the simulator clears the `vehicle_positions` table. During the
-run it prints live counters, including sent requests, effective RPS, successful
-responses, failed responses, in-flight requests, dropped requests, attempted
-requests, and average latency.
+Before starting, the simulator clears `vehicle_positions`,
+`vehicle_last_state`, `vehicle_alerts`, and `geofences`, then creates a default
+active rectangular geofence. This is destructive and removes existing
+monitoring and geofence data. During the run it prints live counters, including
+sent requests, effective RPS, successful responses, failed responses,
+in-flight requests, dropped requests, attempted requests, and average latency.
 
 At the end it prints a benchmark summary with:
 
@@ -134,13 +139,19 @@ At the end it prints a benchmark summary with:
 - p50, p95, and p99 latency.
 - Worst request latency.
 - Average latency.
+- Generated speed-alert events.
+- Generated geofence-exit events.
 
-The simulator generates requests with valid UUIDs, random longitude and
-latitude values within the accepted API ranges, random speed values, and an
-`eventTime` timestamp serialized as an ISO date/time string. It currently
-measures only ingestion throughput for `POST /api/vehicles/positions`; it does
-not exercise alert delivery, route validation, geofencing, delayed events,
-out-of-order events, or other domain rules.
+The simulator generates requests with valid UUIDs and an `eventTime` timestamp
+serialized as an ISO date/time string. Approximately 90% of generated
+positions are inside its default geofence and 10% use a longitude outside it.
+Approximately 99% of generated speeds are within `SPEED_LIMIT` and 1% are
+generated at or above the configured threshold. The generated counters describe
+the chosen event distribution; persisted alerts are still determined by the
+API rules. The simulator exercises ingestion, latest-state updates, speed-limit
+checks, and geofence checks. It does not exercise alert delivery, route
+validation, delayed events, out-of-order events, or future asynchronous domain
+processing.
 
 ## Run with Docker
 

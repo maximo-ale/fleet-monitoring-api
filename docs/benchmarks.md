@@ -1,14 +1,17 @@
 # Benchmarks
 
-This document records benchmark results for the current direct-ingestion
-architecture.
+This document records historical benchmark results for an earlier
+direct-ingestion baseline. The results have not been refreshed for the current
+synchronous flow, which also updates latest vehicle state and evaluates speed
+and active-geofence rules. Do not treat the numbers below as a measurement of
+the current implementation.
 
 ## 10 Requests per Second
 
-Goal: validate that the current backend architecture can sustain 10 position
-ingestion requests per second.
+Historical goal: validate that the architecture under test could sustain 10
+position ingestion requests per second.
 
-### Architecture Under Test
+### Historical Architecture Under Test
 
 - Express API.
 - Direct PostgreSQL/PostGIS insert per request.
@@ -40,9 +43,9 @@ POST /api/vehicles/positions
 
 ### Result
 
-The current architecture satisfies the Level 1 target. The ingestion simulator
-can send fixed-rate position events to the API, and the direct-ingestion path is
-able to handle the required `10` requests per second.
+The architecture measured at the time satisfied the Level 1 target. The
+ingestion simulator sent fixed-rate position events to the API, and the
+direct-ingestion path handled the required `10` requests per second.
 
 The current simulator has also been used at rates above the Level 1 target,
 including more than `700` requests per second for ingestion-only testing. Those
@@ -54,11 +57,12 @@ represent the final backend capacity once additional domain behavior is added.
 - The benchmark measures only the ingestion path.
 - Speed limit alert evaluation now runs in the ingestion transaction, but this
   benchmark does not measure alert delivery or downstream alert workflows.
-- The API does not yet validate whether a vehicle is inside an allowed position
-  or geofence.
-- The API does not yet run route checks or other PostGIS-heavy domain rules.
+- The historical run did not measure the current active-geofence check or
+  `GEOFENCE_EXIT` alert creation.
+- The API still does not run route checks or additional PostGIS-heavy domain
+  rules.
 - The benchmark does not include workers, queues, batching, or alert delivery.
 
-Because of those limitations, this result should be treated as a Level 1
-baseline for direct writes, not as a guarantee for future alerting or geospatial
-processing workloads.
+Because of those limitations, this result should be treated as a historical
+Level 1 direct-write baseline. A new benchmark is needed for the current
+synchronous ingestion, latest-state, alerting, and geospatial workload.
