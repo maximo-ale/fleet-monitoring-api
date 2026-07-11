@@ -113,11 +113,11 @@ cd backend
 npm run simulate
 ```
 
-The current script targets:
+The checked-in benchmark configuration targets:
 
 - API URL: `http://localhost:3000/api/vehicles/positions`
-- Target rate: `230` requests per second
-- Duration: `30` seconds
+- Target rate: `550` requests per second
+- Duration: `120` seconds
 - Dispatch tick: `100` milliseconds
 - Max in-flight requests: `5000`
 
@@ -141,6 +141,13 @@ At the end it prints a benchmark summary with:
 - Average latency.
 - Generated speed-alert events.
 - Generated geofence-exit events.
+
+The simulator runs once per invocation and exits after all in-flight requests
+finish. Wait for `Work Finished` and for the command to return before changing
+the target or starting another run. Running simulators concurrently invalidates
+the result because both processes target the same API and clear the same tables.
+Current synchronous-ingestion measurements are recorded in
+[`benchmarks.md`](benchmarks.md).
 
 The simulator generates requests with valid UUIDs and an `eventTime` timestamp
 serialized as an ISO date/time string. Approximately 90% of generated
