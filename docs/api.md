@@ -1,7 +1,7 @@
 # API
 
-The current version exposes HTTP endpoints with Express. The main functional
-scope is direct vehicle position ingestion.
+The current version exposes HTTP endpoints with Express for direct vehicle
+position ingestion and monitoring reads.
 
 ## Health check
 
@@ -122,3 +122,108 @@ Example:
 
 This can happen, for example, if the API cannot connect to the database or the
 insert fails.
+
+## List Latest Vehicle States
+
+```http
+GET /api/vehicles/latest
+```
+
+Returns the latest stored state for every vehicle, ordered by event time from
+newest to oldest.
+
+Success status:
+
+```http
+200 OK
+```
+
+Example body:
+
+```json
+[
+  {
+    "vehicleId": "550e8400-e29b-41d4-a716-446655440000",
+    "lon": -58.3816,
+    "lat": -34.6037,
+    "speed": 42.5,
+    "eventTime": "2026-06-06T12:00:00.000Z",
+    "updatedAt": "2026-06-06T12:00:00.000Z"
+  }
+]
+```
+
+When no vehicle state has been stored, the endpoint returns `200 OK` with an
+empty array.
+
+## Get One Latest Vehicle State
+
+```http
+GET /api/vehicles/:vehicleId/latest
+```
+
+Returns the latest stored state for the specified vehicle.
+
+Success status and body follow the same object shape used by the list endpoint:
+
+```http
+200 OK
+```
+
+If `vehicleId` is not a valid UUID, the endpoint returns `400 Bad Request` with
+the standard validation error body. If the UUID is valid but no latest state
+exists for it, the endpoint returns:
+
+```http
+404 Not Found
+```
+
+```json
+{
+  "message": "Latest vehicle state not found"
+}
+```
+
+## List Recent Alerts
+
+```http
+GET /api/alerts
+GET /api/alerts?limit=N
+```
+
+Returns alerts ordered by event time from newest to oldest. The optional
+`limit` query parameter must be an integer greater than or equal to `1` and
+restricts the number of returned rows.
+
+Success status:
+
+```http
+200 OK
+```
+
+Example body:
+
+```json
+[
+  {
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "vehicleId": "550e8400-e29b-41d4-a716-446655440000",
+    "alertType": "GEOFENCE_EXIT",
+    "speed": 42.5,
+    "lon": -58.3816,
+    "lat": -34.6037,
+    "eventTime": "2026-06-06T12:00:00.000Z"
+  }
+]
+```
+
+Supported alert types are:
+
+- `SPEED_LIMIT_EXCEEDED`: the reported speed is greater than `SPEED_LIMIT`.
+- `GEOFENCE_EXIT`: the reported position is not covered by any active
+  geofence.
+
+When there are no alerts, the endpoint returns `200 OK` with an empty array.
+An invalid `limit`, including zero, a negative number, a non-integer, or a
+non-numeric value, returns `400 Bad Request` with the standard validation error
+body.
