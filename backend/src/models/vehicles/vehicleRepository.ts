@@ -4,7 +4,6 @@ import { PoolClient } from 'pg';
 export const createPosition = async(client: PoolClient, data: CreatePosition): Promise<VehicleData> => {
     const { vehicleId, speed, lon, lat, eventTime } = data;
 
-    console.log(`:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::DATA: ${JSON.stringify(data, null, 2)}`);
     const result = await client.query(`
         INSERT INTO vehicle_positions (vehicle_id, position, speed, created_at, event_time)
         VALUES (

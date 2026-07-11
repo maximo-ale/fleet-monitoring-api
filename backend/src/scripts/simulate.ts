@@ -1,5 +1,12 @@
+import { createGeofence } from '../models/geofences/geofenceRepository';
 import { CreatePosition } from '../models/vehicles/vehicleInterface';
 import { cleanTables } from '../utils/dropTables';
+import dotenv from 'dotenv';
+
+dotenv.config({ quiet: true });
+
+const SPEED_ALERT_PROBABILITY = 0.01;
+const GEOFENCE_EXIT_PROBABILITY = 0.1;
 
 let success = 0;
 let failed = 0;
@@ -7,20 +14,24 @@ let sent = 0;
 let inFlight = 0;
 let dropped = 0;
 let attempted = 0;
+let speedAlerts = 0;
+let geofenceExitAlerts = 0;
 
 const maxInFlight = 5000;
 
-const requestsPerSecond = 300;
+const requestsPerSecond = 230;
 const tickMs = 100;
 const timeToWork = 30;
 
 const requestsToAttempt = requestsPerSecond * timeToWork;
 
-const minLon: number = -180;
-const maxLon: number = 180;
-const minLat: number = -90;
-const maxLat: number = 90;
+const minLon: number = 40;
+const maxLon: number = 50;
+const minLat: number = 40;
+const maxLat: number = 50;
 const maxSpeed: number = 200;
+
+const invalidLon = 20;
 
 const apiUrl: string = 'http://localhost:3000/api/vehicles/positions'; 
 
@@ -52,6 +63,13 @@ const uuids = [
 ];
 
 const randomLon = (): number => {
+    const randomNumber = Math.random();
+    
+    if (randomNumber < GEOFENCE_EXIT_PROBABILITY){
+        geofenceExitAlerts++;
+        return invalidLon;
+    }
+
     return Math.random() * (maxLon - minLon) + minLon;
 }
 
@@ -60,7 +78,14 @@ const randomLat = (): number => {
 }
 
 const randomSpeed = (): number => {
-    return Math.random() * maxSpeed;
+    const randomNumber = Math.random();
+    
+    if (randomNumber < SPEED_ALERT_PROBABILITY){
+        speedAlerts++;
+        return Math.random() * (maxSpeed - Number(process.env.SPEED_LIMIT)) + Number(process.env.SPEED_LIMIT);
+    }
+
+    return Math.random() * Number(process.env.SPEED_LIMIT);
 }
 
 const getPercentile = (arr: number[], n: number): number => {
@@ -95,6 +120,9 @@ const showResults = () => {
     console.log(`Requests failed: ${failed}`);
     console.log(`Requests in flight: ${inFlight}`);
     console.log(`Requests dropped: ${dropped}`);
+    console.log('');
+    console.log(`Speed alerts: ${speedAlerts}`);
+    console.log(`Geofence exits: ${geofenceExitAlerts}`);
     console.log('');
     console.log(`p50: ${p50}`);
     console.log(`p95: ${p95}`);
@@ -134,8 +162,24 @@ const sendRequest = async(vehicle: CreatePosition) => {
 
 }
 
+const createBasicGeofence = async() => {
+    await createGeofence({
+        name: 'Simulation geofence',
+        area: [
+            [minLon, minLat],
+            [minLon, maxLat],
+            [maxLon, minLat],
+            [maxLon, maxLat],
+            [minLon, minLat],
+        ],
+        isActive: true,
+    });
+}
+
 const main = async() => {
     await cleanTables();
+    await createBasicGeofence();
+
     const start = performance.now();
 
     const logsInterval = setInterval(() => {
