@@ -2,18 +2,27 @@ import { PoolClient } from 'pg';
 import pool from '../../config/dbConfig';
 import { envConfig } from '../../config/envConfig';
 import { NotFoundError } from '../../utils/errors';
-import { CreatePosition, LatestVehicleState, VehicleData } from './vehicleInterface';
+import { CreatePosition, LatestVehicleState, PositionEvent, PositionProcessingResult, VehicleData } from './vehicleInterface';
 import * as vehicleRepository from './vehicleRepository';
 
-export const saveVehiclePosition = async(data: CreatePosition): Promise<VehicleData> => {
+export const saveVehiclePosition = async(data: PositionEvent): Promise<PositionProcessingResult> => {
     const client: PoolClient = await pool.connect();
 
     try {
         await client.query('BEGIN');
         
         const { vehicleId, speed, lon, lat, eventTime } = data;
+
+        const newPosition: VehicleData | null = await vehicleRepository.createPosition(client, data);
+
+        if (!newPosition){
+            console.log('Duplicate');
+            await client.query('COMMIT');
+            return {
+                status: 'DUPLICATE',
+            };
+        }
         
-        const newPosition: VehicleData = await vehicleRepository.createPosition(client, data);
         await vehicleRepository.upsertLatestVehicleState(client, data);
 
         if (speed > envConfig.SPEED_LIMIT) {
@@ -42,7 +51,10 @@ export const saveVehiclePosition = async(data: CreatePosition): Promise<VehicleD
 
         await client.query('COMMIT');
 
-        return newPosition;
+        return {
+            status: 'SUCCESS',
+            position: newPosition,
+        };
     } catch (err) {
         await client.query('ROLLBACK');
         throw err;

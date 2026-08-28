@@ -22,7 +22,11 @@ export interface CreatePosition {
     speed: number,
     lat: number,
     lon: number,
-    eventTime: Date,
+    eventTime: string,
+}
+
+export interface PositionEvent extends CreatePosition {
+    eventId: string,
 }
 
 export interface VehicleAlert {
@@ -31,5 +35,14 @@ export interface VehicleAlert {
     speed: number,
     lat: number,
     lon: number,
-    eventTime: Date,
+    eventTime: string,
 }
+
+export type PositionProcessingResult = 
+    | {
+        status: 'SUCCESS',
+        position: VehicleData,
+    }
+    | {
+        status: 'DUPLICATE',
+    }

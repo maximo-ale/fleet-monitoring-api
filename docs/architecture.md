@@ -1,14 +1,27 @@
 # Architecture
 
-The current version uses a direct-ingestion architecture. The API receives an
-HTTP request, validates the data, and writes directly to PostgreSQL/PostGIS.
+The current version uses asynchronous position ingestion:
+
+```text
+HTTP client -> Express ingestion endpoint -> RabbitMQ -> position worker -> PostgreSQL/PostGIS
+```
+
+The ingestion request validates and publishes an event, while the worker stores
+the position, updates latest state, and processes alerts.
 
 ## Current Components
 
-- `backend/src/server.ts`: loads the application and starts the HTTP listener.
+- `backend/src/server.ts`: connects to RabbitMQ, then loads the application and
+  starts the HTTP listener.
 - `backend/src/app.ts`: initializes Express, prepares the database, optionally
   clears its tables, registers routes, and mounts the error middleware.
 - `backend/src/config/dbConfig.ts`: creates the PostgreSQL connection pool.
+- `backend/src/config/rabbitmq.ts`: connects the backend to RabbitMQ, creates
+  the confirm channel, and declares `vehicle.position.events`.
+- `backend/src/messaging/positionPublisher.ts`: serializes and persistently
+  publishes position events, then waits for publisher confirms.
+- `backend/src/workers/positionWorker.ts`: consumes and processes queued
+  position events with manual acknowledgements.
 - `backend/src/utils/createTables.ts`: creates extensions and the required
   vehicle position, latest-state, alert, and geofence tables.
 - `backend/src/utils/dropTables.ts`: clears the current tables when
@@ -30,29 +43,100 @@ HTTP request, validates the data, and writes directly to PostgreSQL/PostGIS.
 - `backend/jest.config.cjs`: configures Jest to run TypeScript tests in the
   current ESM project.
 
-## Ingestion Flow
+## Position Ingestion Flow
 
 1. The client sends `POST /api/vehicles/positions`.
 2. Express receives the request and parses the JSON body.
 3. The validation middleware applies `createPositionSchema`.
 4. If the data is invalid, the API responds with `400`.
-5. If the data is valid, the controller calls the service.
-6. The service starts a database transaction.
-7. The repository stores the position event.
-8. The repository upserts the latest vehicle state.
-9. If `speed` is greater than `SPEED_LIMIT`, the repository stores a
+5. For valid data, the controller generates an `eventId` and publishes the
+   complete event to RabbitMQ.
+6. After RabbitMQ confirms the publication, the API responds with `202
+   Accepted` and the `eventId`.
+7. The position worker consumes the event.
+8. The worker starts a database transaction and stores the position event.
+9. The worker upserts the latest vehicle state.
+10. If `speed` is greater than `SPEED_LIMIT`, the worker stores a
    `SPEED_LIMIT_EXCEEDED` alert with the vehicle, speed, position, and event
    timestamp.
-10. The repository uses PostGIS `ST_Covers` to check whether the position is
+11. The worker uses PostGIS `ST_Covers` to check whether the position is
     covered by at least one active geofence.
-11. If no active geofence covers the position, the repository stores a
+12. If no active geofence covers the position, the worker stores a
     `GEOFENCE_EXIT` alert.
-12. The service commits the transaction.
-13. The API responds with `201` and the created position.
+13. The worker commits the transaction, then acknowledges the message.
 
-Position storage, latest-state persistence, and any generated alerts are part
-of the same database transaction. With no active geofence covering a reported
-point, that position produces a `GEOFENCE_EXIT` alert.
+The HTTP request does not wait for position persistence, latest-state updates,
+speed-alert processing, or geofence-alert processing. Position storage,
+latest-state persistence, and generated alerts are part of the worker's single
+database transaction. With no active geofence covering a reported point, that
+position produces a `GEOFENCE_EXIT` alert.
+
+## RabbitMQ and Delivery
+
+RabbitMQ is a local Docker Compose dependency. The application uses AMQP on
+port `5672`; the configured management UI is available on port `15672`. The
+queue is `vehicle.position.events`. Both the backend and worker assert it as a
+durable queue. The backend publishes persistent messages on a confirm channel
+and waits for publisher confirmation before returning `202`.
+
+RabbitMQ delivery to the worker is at-least-once. The worker consumes with
+manual acknowledgements and a prefetch of one. Its success path is:
+
+```text
+consume -> database transaction -> position insert -> latest-state update -> alert processing -> COMMIT -> ACK
+```
+
+The worker does not acknowledge a message as successfully processed until its
+database transaction commits. If processing fails before `COMMIT`, the service
+rolls back the transaction and the worker negatively acknowledges the message
+with requeue enabled.
+
+## Position Events and Idempotency
+
+The POST body contains `vehicleId`, `speed`, `lon`, `lat`, and `eventTime`.
+The backend, not the client, generates `eventId`. It adds that value to the
+RabbitMQ event:
+
+```json
+{
+  "eventId": "UUID generated by the backend",
+  "vehicleId": "UUID",
+  "speed": 42.5,
+  "lon": -58.3816,
+  "lat": -34.6037,
+  "eventTime": "2026-06-06T12:00:00.000Z"
+}
+```
+
+The worker persists `eventId` in `vehicle_positions.event_id`, which has a
+`UNIQUE` constraint. This handles the failure window where the database
+transaction commits but the worker crashes before its RabbitMQ ACK: RabbitMQ
+redelivers the same message with its stable `eventId`. The worker attempts the
+position insert first using `ON CONFLICT (event_id) DO NOTHING`. If the insert
+reports a duplicate, it commits without updating latest state or creating
+alerts, then ACKs the duplicate delivery. Thus the side effects are not
+repeated.
+
+## Failure Behavior
+
+- An invalid HTTP payload is rejected with `400` before an event is published.
+- If RabbitMQ publication or publisher confirmation fails, the HTTP error
+  handler returns `500`; no `202` is returned.
+- If worker processing fails before the transaction commits, the transaction is
+  rolled back and the message is negatively acknowledged for requeue.
+- If the transaction commits but the worker fails before ACK, RabbitMQ can
+  redeliver the event. The unique `event_id` detects it; the worker skips
+  latest-state and alert side effects and ACKs the duplicate.
+
+## Testing
+
+The API tests cover request validation and the `202` response with a generated
+`eventId`. Position persistence, latest-state updates, and alert behavior are
+tested separately by calling the position-processing service rather than by
+waiting on asynchronous HTTP timing. Idempotency tests process the same event
+twice and verify that only one position and one applicable speed alert are
+stored. The current suite does not test an end-to-end worker delivery cycle or
+asynchronous-flow timing.
 
 ## Simulator Flow
 
@@ -72,10 +156,8 @@ The simulator is a local load-generation script for the ingestion endpoint.
 7. It records request latency and reports average, p50, p95, p99, worst
    request latency, and generated speed-alert and geofence-exit counters.
 
-This simulator is intended to measure the current direct-ingestion path only.
-It exercises the current synchronous speed and geofence checks, but does not
-represent capacity with future asynchronous processing, route checks, or
-additional PostGIS rules.
+This simulator submits events to the asynchronous ingestion endpoint. It does
+not measure worker throughput or end-to-end asynchronous processing latency.
 
 ## Current Data Model
 
@@ -89,6 +171,8 @@ Columns:
 - `speed`: speed as `DOUBLE PRECISION`.
 - `event_time`: vehicle event timestamp with time zone.
 - `created_at`: database insertion timestamp with time zone.
+- `event_id`: backend-generated event UUID; unique across position events and
+  used to identify duplicate RabbitMQ deliveries.
 
 Table: `vehicle_last_state`
 
@@ -147,15 +231,16 @@ Any other error is returned as `500 Internal server error`.
 - There is no endpoint for querying position history; only latest-state reads
   are currently available.
 - There are no update or delete endpoints.
-- There is no message broker or asynchronous processing.
-- There are no workers.
-- There are no bulk inserts.
+- There is one worker process design only; multiple workers are not implemented.
+- There is no batch processing or bulk insert path.
+- There are no dead-letter queues or advanced retry/backoff strategy.
 - There are no public geofence CRUD endpoints.
 - There are no alert notification, acknowledgement, or resolution workflows.
 - There are no per-vehicle speed limits.
-- The current benchmark script drives only the position-ingestion endpoint,
-  including its synchronous latest-state, speed, and geofence processing.
+- There are no WebSocket or other live updates.
+- The current benchmark script does not benchmark the asynchronous flow,
+  worker throughput, or end-to-end processing latency.
 - There is no formal API versioning.
 - Table creation is embedded in application startup.
-- The current `docker-compose.yml` defines the database, but not a complete
-  service setup for running backend and database together.
+- The current `docker-compose.yml` defines PostgreSQL/PostGIS and RabbitMQ,
+  but not backend or worker services.
