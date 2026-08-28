@@ -1,11 +1,11 @@
-import crypto from 'crypto';
 import request from 'supertest';
 
 import app from '../src/app';
 import { cleanTables } from '../src/utils/dropTables';
 import pool from '../src/config/dbConfig';
-import { createGlobalGeofence, getLastState, getResponses, getVehiclePositions } from './helper';
+import { createGlobalGeofence, getLastState, getVehiclePositions, processVehicle, processVehicles } from './helper';
 import { createGeofence } from '../src/models/geofences/geofenceRepository';
+import { saveVehiclePosition } from '../src/models/vehicles/vehicleService';
 
 const prefix = '/api/vehicles';
 
@@ -126,16 +126,21 @@ describe('/api/vehicles', () => {
                     .post(`${prefix}/positions`)
                     .send(requests[i]);
             }
-            
-            console.log(`reqs.length---------------------- ${reqs.length}`);
 
             const responses = await Promise.all(reqs);
 
-            const valid = responses.filter(res => res.status === 201);
+            const valid = responses.filter(res => res.status === 202);
             const invalid = responses.filter(res => res.status >= 400);
 
             expect(valid.length).toBe(validExpected);
             expect(invalid.length).toBe(invalidExpected);
+
+            for (let i = 0; i < responses.length; i++){
+                expect(responses[i].body.eventId).toBeDefined();
+                expect(responses[i].body.eventId).toMatch(
+                    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+                );
+            }
 
         });
 
@@ -275,12 +280,8 @@ describe('/api/vehicles', () => {
                     eventTime: '2026-07-04T10:00:00.000Z',
                 },
             ];
-
-            const responses: any = await getResponses(vehicles, prefix);
-
-            for (let i = 0; i < responses.length; i++){
-                expect(responses[i].status).toBe(201);
-            }
+            
+            await processVehicles(vehicles);
             
             const vehiclePositionsRes = await getVehiclePositions();
             const lastStateRes = await getLastState();
@@ -310,11 +311,7 @@ describe('/api/vehicles', () => {
                 }
             ];
             
-            const responses: any = await getResponses(vehicles, prefix);
-
-            for (let i = 0; i < responses.length; i++){
-                expect(responses[i].status).toBe(201);
-            }
+            await processVehicles(vehicles);
             
             const vehiclePositionsRes = await getVehiclePositions();
             const lastStateRes = await getLastState();
@@ -347,7 +344,7 @@ describe('/api/vehicles', () => {
                 },
             ];
 
-            await getResponses(vehicles, prefix);
+            await processVehicles(vehicles);
 
             const response = await request(app)
                 .get(`${prefix}/latest`);
@@ -386,7 +383,7 @@ describe('/api/vehicles', () => {
                 },
             ];
 
-            await getResponses(vehicles, prefix);
+            await processVehicles(vehicles);
 
             const response = await request(app)
                 .get(`${prefix}/${vehicles[1].vehicleId}/latest`);
@@ -461,13 +458,7 @@ describe('/api/vehicles', () => {
         it.each(testCases)('$caseName', async ({ vehicles, vehiclesToGenerateAlerts }) => {
             await createGlobalGeofence();
             
-            for (const vehicle of vehicles) {
-                const response = await request(app)
-                    .post(`${prefix}/positions`)
-                    .send(vehicle);
-            
-                expect(response.status).toBe(201);
-            }
+            await processVehicles(vehicles);
 
             const vehiclePositionsRes = await getVehiclePositions();
             const lastStateRes = await getLastState();
@@ -539,7 +530,7 @@ describe('/api/vehicles', () => {
                 },
             ];
 
-            await getResponses(vehicles, prefix);
+            await processVehicles(vehicles);
 
             const response = await request(app)
                 .get('/api/alerts');
@@ -597,7 +588,7 @@ describe('/api/vehicles', () => {
                 },
             ];
 
-            await getResponses(vehicles, prefix);
+            await processVehicles(vehicles);
 
             const response = await request(app)
                 .get('/api/alerts?limit=2');
@@ -773,11 +764,7 @@ describe('/api/vehicles', () => {
                 await createGeofence(geofences[i]);
             }
 
-            const res = await request(app)
-                .post(`${prefix}/positions`)
-                .send(vehicle);
-
-            expect(res.status).toBe(201);
+            await processVehicle(vehicle);
 
             const alerts = await pool.query(`
                 SELECT vehicle_id "vehicleId"
@@ -791,6 +778,55 @@ describe('/api/vehicles', () => {
             } else {
                 expect(alerts.rowCount).toBe(0);
             }
+        })
+    });
+
+    describe('Idempotency tests', () => {
+        it('does not process the same event twice', async() => {
+            const event = {
+                eventId: crypto.randomUUID(),
+                vehicleId: "123e4567-e89b-12d3-a456-426614174000",
+                speed: 25,
+                lat: 55,
+                lon: 100,
+                eventTime: new Date().toISOString(),
+            };
+
+            const firstResponse = await saveVehiclePosition(event);
+            const secondResponse = await saveVehiclePosition(event);
+
+            expect(firstResponse.status).toBe('SUCCESS');
+            expect(secondResponse.status).toBe('DUPLICATE');
+
+            const positions = await getVehiclePositions();
+
+            expect(positions.rowCount).toBe(1);
+        });
+
+        it('does not create duplicate alerts for the same event', async() => {
+            const event = {
+                eventId: crypto.randomUUID(),
+                vehicleId: "123e4567-e89b-12d3-a456-426614174000",
+                speed: 150,
+                lat: 55,
+                lon: 100,
+                eventTime: new Date().toISOString(),
+            };
+
+            await saveVehiclePosition(event);
+            await saveVehiclePosition(event);
+
+            const positions = await getVehiclePositions();
+
+            const alerts = await pool.query(`
+                SELECT *
+                FROM vehicle_alerts
+                WHERE vehicle_id = $1
+                  AND alert_type = 'SPEED_LIMIT_EXCEEDED';
+            `, [event.vehicleId]);
+
+            expect(positions.rowCount).toBe(1);
+            expect(alerts.rowCount).toBe(1);
         })
     });
 });

@@ -1,13 +1,15 @@
 # Setup
 
 This guide covers how to run the current version of the project. The backend
-lives inside `backend/` and uses PostgreSQL/PostGIS as its database.
+lives inside `backend/`, uses PostgreSQL/PostGIS as its database, and uses
+RabbitMQ to queue position events.
 
 ## Requirements
 
 - Node.js
 - npm
-- Docker and Docker Compose, if you want to run the database with Docker
+- Docker and Docker Compose, for the local PostgreSQL/PostGIS and RabbitMQ
+  infrastructure
 
 ## Environment Variables
 
@@ -23,6 +25,7 @@ DB_PASSWORD=postgres
 DB_NAME=pg_db
 RESET_DB=false
 SPEED_LIMIT=120
+RABBITMQ_URL=amqp://guest:guest@localhost:5672
 ```
 
 `RESET_DB=true` clears the current database tables on startup after ensuring
@@ -48,10 +51,12 @@ npm install
 From the project root:
 
 ```bash
-docker compose up -d postgres
+docker compose up -d postgres rabbitmq
 ```
 
-The current `docker-compose.yml` starts PostgreSQL/PostGIS with:
+This starts the local infrastructure used by the backend and worker.
+
+PostgreSQL/PostGIS is configured with:
 
 - User: `postgres`
 - Password: `postgres`
@@ -59,28 +64,50 @@ The current `docker-compose.yml` starts PostgreSQL/PostGIS with:
 - Local port: `5433`
 - Internal container port: `5432`
 
-## Run the Backend Locally
+RabbitMQ is configured with:
 
-With the database running and the `.env` file configured:
+- AMQP port: `5672`
+- Management UI: `http://localhost:15672`
+- Local credentials: `guest` / `guest`
+
+## Run the Backend and Worker Locally
+
+With Docker infrastructure running and the `.env` file configured, start the
+Express backend in one terminal:
 
 ```bash
 cd backend
 npm run dev
 ```
 
-On startup, the application:
+Start the RabbitMQ position worker in a second terminal:
+
+```bash
+cd backend
+npm run worker
+```
+
+Docker Compose currently runs PostgreSQL/PostGIS and RabbitMQ only. The Express
+backend and worker run separately on the host with the commands above.
+
+On startup, the backend:
 
 - Loads environment variables.
 - Connects to PostgreSQL.
 - Creates the `postgis` and `pgcrypto` extensions if they do not exist.
 - Creates the required vehicle position, latest-state, alert, and geofence
   tables if they do not exist.
+- Connects to RabbitMQ and declares the position-event queue.
 - Exposes the API on the port defined by `PORT`.
+
+The worker connects to the same RabbitMQ instance, declares the queue, and
+processes position events one at a time.
 
 ## Run Tests
 
 The backend is configured with Jest, ts-jest, and Supertest for TypeScript API
-tests.
+tests. The suite also connects to RabbitMQ, so start `rabbitmq` as well as the
+database before running it.
 
 With the database running and the `.env` file configured:
 
@@ -103,10 +130,11 @@ the PostgreSQL pool after it finishes.
 ## Run the Ingestion Simulator
 
 The backend includes a simulator for sending vehicle position events to the API
-at a fixed target rate. It is useful for testing the current direct-ingestion
-path with the current synchronous speed-limit and geofence checks.
+at a fixed target rate. It measures request acceptance by the asynchronous
+ingestion endpoint; it does not measure worker throughput or end-to-end
+processing latency.
 
-Start the database and backend first, then run:
+Start the Docker infrastructure, backend, and worker first, then run:
 
 ```bash
 cd backend
@@ -155,10 +183,11 @@ positions are inside its default geofence and 10% use a longitude outside it.
 Approximately 99% of generated speeds are within `SPEED_LIMIT` and 1% are
 generated at or above the configured threshold. The generated counters describe
 the chosen event distribution; persisted alerts are still determined by the
-API rules. The simulator exercises ingestion, latest-state updates, speed-limit
-checks, and geofence checks. It does not exercise alert delivery, route
-validation, delayed events, out-of-order events, or future asynchronous domain
-processing.
+API rules. The simulator submits position events to the API. The resulting
+background processing includes latest-state updates, speed-limit checks, and
+geofence checks; the simulator itself does not wait for or validate those
+outcomes. It does not exercise alert delivery, route validation, delayed
+events, out-of-order events, or worker throughput.
 
 ## Run with Docker
 
@@ -172,9 +201,10 @@ docker build -t fleet-monitoring-api .
 docker run --env-file .env -p 3000:3000 fleet-monitoring-api
 ```
 
-If the backend runs in a separate container and the database runs with Docker
-Compose, `DB_HOST` must point to a host or service reachable from that
-container. The current `docker-compose.yml` only defines the database service.
+If the backend runs in a separate container while PostgreSQL and RabbitMQ run
+with Docker Compose, `DB_HOST` and `RABBITMQ_URL` must point to hosts or
+services reachable from that container. The current `docker-compose.yml` does
+not define backend or worker services.
 
 ## Quick Check
 

@@ -1,18 +1,20 @@
-import { CreatePosition, LatestVehicleState, VehicleAlert, VehicleData } from './vehicleInterface';
+import { CreatePosition, LatestVehicleState, PositionEvent, VehicleAlert, VehicleData } from './vehicleInterface';
 import { PoolClient } from 'pg';
 
-export const createPosition = async(client: PoolClient, data: CreatePosition): Promise<VehicleData> => {
-    const { vehicleId, speed, lon, lat, eventTime } = data;
+export const createPosition = async(client: PoolClient, data: PositionEvent): Promise<VehicleData | null> => {
+    const { vehicleId, speed, lon, lat, eventTime, eventId } = data;
 
     const result = await client.query(`
-        INSERT INTO vehicle_positions (vehicle_id, position, speed, created_at, event_time)
+        INSERT INTO vehicle_positions (vehicle_id, position, speed, created_at, event_time, event_id)
         VALUES (
             $1,
             ST_SetSRID(ST_MakePoint($2, $3), 4326),
             $4,
             NOW(),
-            $5
+            $5,
+            $6
         )
+        ON CONFLICT (event_id) DO NOTHING
         RETURNING
             vehicle_id "vehicleId",
             ST_X(position::geometry) "lon",
@@ -20,8 +22,12 @@ export const createPosition = async(client: PoolClient, data: CreatePosition): P
             speed,
             created_at "createdAt",
             event_time "eventTime"
-    `, [vehicleId, lon, lat, speed, eventTime]);
+    `, [vehicleId, lon, lat, speed, eventTime, eventId]);
 
+    if (result.rowCount === 0){
+        return null;
+    }
+    
     return result.rows[0];
 }
 

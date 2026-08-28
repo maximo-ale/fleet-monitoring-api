@@ -1,6 +1,7 @@
 import app from "../src/app";
 import pool from "../src/config/dbConfig";
 import { createGeofence } from "../src/models/geofences/geofenceRepository";
+import { saveVehiclePosition } from "../src/models/vehicles/vehicleService";
 import { ValidVehicleBody } from "./vehiclePositionTests.test";
 import request from 'supertest';
 
@@ -34,6 +35,26 @@ export const getResponses = async(vehicles: ValidVehicleBody[], prefix: string) 
     }
 
     return responses;
+}
+
+export const processVehicle = async(
+    vehicle: ValidVehicleBody
+) => {
+    return saveVehiclePosition({
+        eventId: crypto.randomUUID(),
+        ...vehicle,
+    });
+}
+
+export const processVehicles = async(
+    vehicles: ValidVehicleBody[]
+) => {
+    for (let vehicle of vehicles){
+        await saveVehiclePosition({
+            eventId: crypto.randomUUID(),
+            ...vehicle,
+        })
+    }
 }
 
 // Creates global geofence to avoid alerts

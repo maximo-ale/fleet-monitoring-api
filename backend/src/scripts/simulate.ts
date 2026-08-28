@@ -20,7 +20,7 @@ let geofenceExitAlerts = 0;
 
 const maxInFlight = 5000;
 
-const requestsPerSecond = 550;
+const requestsPerSecond = 400;
 const tickMs = 100;
 const timeToWork = 120;
 
@@ -141,7 +141,7 @@ const createVehicle = (): CreatePosition => {
         lon: randomLon(),
         lat: randomLat(),
         speed: randomSpeed(),
-        eventTime: new Date(),
+        eventTime: new Date().toISOString(),
     }
 }
 

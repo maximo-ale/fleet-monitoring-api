@@ -1,8 +1,9 @@
-# Synchronous Ingestion Benchmark
+# Historical Synchronous Ingestion Benchmark
 
-This benchmark establishes the capacity baseline of the current synchronous
-vehicle-position ingestion flow before introducing asynchronous processing,
-workers, queues, batching, or database optimizations.
+This benchmark records the synchronous vehicle-position ingestion baseline
+measured before the current RabbitMQ-based asynchronous flow was introduced.
+It is historical context only; it does not measure the current worker or
+end-to-end asynchronous processing.
 
 ## Summary
 
@@ -23,7 +24,8 @@ capacity boundary rather than a universal production limit.
 - PostgreSQL/PostGIS 16-3.5 running in Docker and exposed on local port 5433.
 - Endpoint: `POST /api/vehicles/positions`.
 - One request and database transaction per vehicle-position event.
-- No message broker, workers, batching, or bulk inserts.
+- No message broker, workers, batching, or bulk inserts at the time of
+  measurement.
 
 Each accepted request synchronously:
 

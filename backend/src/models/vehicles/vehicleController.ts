@@ -1,11 +1,19 @@
 import { Request, Response } from 'express';
 import * as vehicleService from './vehicleService';
 import { LatestVehicleState, VehicleData } from './vehicleInterface';
+import { publishPositionEvent } from '../../messaging/positionPublisher';
 
 export const createPosition = async(req: Request, res: Response) => {
-    const positionCreated: VehicleData = await vehicleService.saveVehiclePosition(req.body);
+    const event = {
+        eventId: crypto.randomUUID(),
+        ...req.body,
+    };
 
-    return res.status(201).json({positionCreated});
+    await publishPositionEvent(event);
+
+    return res.status(202).json({
+        eventId: event.eventId,
+    });
 }
 
 export const getLatestVehicleStates = async(req: Request, res: Response) => {

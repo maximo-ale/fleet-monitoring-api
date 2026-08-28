@@ -4,9 +4,9 @@ Backend for receiving vehicle positions and exposing the current monitoring
 state.
 
 The project is currently in an initial functional version. It includes an
-Express API, PostgreSQL/PostGIS connectivity, automatic setup of the basic
-database structure, Zod validation, centralized error handling, and a direct
-vehicle position ingestion endpoint.
+Express API, PostgreSQL/PostGIS connectivity, RabbitMQ-backed asynchronous
+position ingestion, automatic setup of the basic database structure, Zod
+validation, and centralized error handling.
 
 ## Current Stack
 
@@ -15,6 +15,7 @@ vehicle position ingestion endpoint.
 - Express
 - PostgreSQL
 - PostGIS
+- RabbitMQ
 - pg
 - Zod
 - dotenv
@@ -30,7 +31,8 @@ Implemented:
 - Health endpoint: `GET /api/health`.
 - Position ingestion endpoint: `POST /api/vehicles/positions`.
 - Request body validation with Zod.
-- Position insertion into PostgreSQL/PostGIS.
+- Asynchronous position ingestion through RabbitMQ.
+- Position worker for PostgreSQL/PostGIS persistence and alert processing.
 - Latest vehicle state persistence and read endpoints.
 - Automatic extension and table setup on application startup.
 - Centralized error handling middleware.
@@ -42,20 +44,23 @@ Implemented:
 - Active-geofence checks with PostGIS and geofence exit alert persistence.
 - Recent alert read endpoint with an optional result limit.
 - Dockerfile for the backend.
-- Docker Compose setup for PostgreSQL/PostGIS.
+- Docker Compose setup for PostgreSQL/PostGIS and RabbitMQ.
 
 Not implemented yet:
 
-- Message broker.
-- Workers.
-- Asynchronous ingestion and alert processing.
+- Multiple workers.
 - Bulk inserts.
+- Batch processing.
+- Dead-letter queues.
+- Advanced retry or backoff strategy.
 - Alert notifications.
 - Alert acknowledgement or resolution.
 - Per-vehicle speed limits.
 - Public geofence CRUD endpoints.
 - Dashboard or user interface.
 - Authentication.
+- WebSocket or other live updates.
+- Asynchronous-flow benchmarking.
 
 ## Documentation
 

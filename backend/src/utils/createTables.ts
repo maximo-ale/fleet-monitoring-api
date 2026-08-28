@@ -11,7 +11,8 @@ export const createTables = async() => {
             position geography(POINT, 4326) NOT NULL,
             speed DOUBLE PRECISION NOT NULL,
             created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            event_time TIMESTAMPTZ NOT NULL
+            event_time TIMESTAMPTZ NOT NULL,
+            event_id UUID NOT NULL UNIQUE
         );
     `);
     
@@ -46,5 +47,7 @@ export const createTables = async() => {
         );
     `);
 
+    console.log('');
+    console.log('---PostgreSQL Tables---');
     console.log('Tables created successfully!');
 }
