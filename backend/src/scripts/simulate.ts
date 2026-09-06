@@ -9,22 +9,25 @@ dotenv.config({ quiet: true });
 const SPEED_ALERT_PROBABILITY = 0.01;
 const GEOFENCE_EXIT_PROBABILITY = 0.1;
 
-let success = 0;
+let accepted = 0;
 let failed = 0;
 let sent = 0;
 let inFlight = 0;
 let dropped = 0;
 let attempted = 0;
+let processed = 0;
+let processedAtLoadEnd = 0;
 let speedAlerts = 0;
 let geofenceExitAlerts = 0;
 
-const maxInFlight = 5000;
+const maxInFlight = 200;
 
 const requestsPerSecond = 400;
 const tickMs = 100;
-const timeToWork = 120;
+const timeToWork = 15;
 
 const requestsToAttempt = requestsPerSecond * timeToWork;
+const maxTimeout = 30000;
 
 const minLon: number = 40;
 const maxLon: number = 50;
@@ -36,8 +39,13 @@ const invalidLon = 20;
 
 const apiUrl: string = 'http://localhost:3000/api/vehicles/positions'; 
 
+let start: number;
+let logging: boolean = true;
+
 let loadElapsed = 0;
+let acceptedElapsed = 0;
 let totalElapsed = 0;
+let drainElapsed = 0;
 
 let latencies: number[] = [];
 
@@ -99,39 +107,60 @@ const getPercentile = (arr: number[], n: number): number => {
     return arr[safeIndex];
 }
 
-const showResults = () => {
+const showResults = async() => {
     latencies.sort((a, b) => a - b);
 
-    const averageLatency = latencies.reduce((acc, current) => acc + current, 0) / latencies.length;
+    const averageLatency =
+        latencies.length === 0 ?
+            0 :
+            latencies.reduce((acc, current) => acc + current, 0) / latencies.length;
     
     const p50 = getPercentile(latencies, 0.5);
     const p95 = getPercentile(latencies, 0.95);
     const p99 = getPercentile(latencies, 0.99);
 
-    const worstReq = latencies[latencies.length - 1];
+    const worstReq = 
+        latencies.length === 0 ?
+            0 :
+            latencies[latencies.length - 1];
+
+    const processedAtLoadEndPercentage =
+        processed === 0 ?
+            0 :
+            (processedAtLoadEnd / processed * 100).toFixed(2);
+
+    const processedDuringDrainPercentage =
+        processed === 0 ?
+            0 :
+            ((processed - processedAtLoadEnd) / processed * 100).toFixed(2);
+            
+    const processedPercentage = processed === 0 ? 0 : (processed / accepted * 100).toFixed(2);
 
     console.log('');
     console.log('--------Work Finished--------')
     console.log(`Load duration: ${Number((loadElapsed / 1000).toFixed(2))}s`);
     console.log(`Total duration (including drain): ${Number((totalElapsed / 1000).toFixed(2))}s`);
     console.log('');
-    console.log(`Attempted requests: ${attempted} ${Number((attempted / loadElapsed * 1000).toFixed(2))}/s during load`);
-    console.log(`Total requests sent: ${sent} ${Number((sent / loadElapsed * 1000).toFixed(2))}/s during load`);
+    console.log(`Load throughput: ${attempted} ${Number((attempted / loadElapsed * 1000).toFixed(2))}/s during load`);
+    console.log(`Acceptance throughput: ${Number((accepted / acceptedElapsed * 1000).toFixed(2))}/s until HTTP completion`);
+    console.log(`Processing throughput (End-to-End): ${Number((processed / totalElapsed * 1000).toFixed(2))}/s including drain`);
     console.log('');
-    console.log(`Requests succeeded: ${success}`);
-    console.log(`Completion throughput: ${Number(((success + failed) / totalElapsed * 1000).toFixed(2))}/s including drain`);
+    console.log(`Processed during load: ${processedAtLoadEnd} / ${processed} (${processedAtLoadEndPercentage}%)`);
+    console.log(`Processed during drain: ${processed - processedAtLoadEnd} / ${processed} (${processedDuringDrainPercentage})`);
+    console.log(`Drain: ${(drainElapsed / 1000).toFixed(2)}s`);
     console.log('');
-    console.log(`Requests failed: ${failed}`);
-    console.log(`Requests in flight: ${inFlight}`);
-    console.log(`Requests dropped: ${dropped}`);
+    console.log(`Requests processed: ${processed} / ${accepted}   (${processedPercentage}%)`);
+    console.log(`Requests dropped: ${dropped} (${(dropped / attempted * 100).toFixed(2)}%)`);
+    console.log(`Requests failed: ${failed} (${(failed / attempted * 100).toFixed(2)}%)`);
+    console.log(`Requests in flight: ${inFlight} (${(inFlight / attempted * 100).toFixed(2)}%)`);
     console.log('');
     console.log(`Speed alerts: ${speedAlerts}`);
     console.log(`Geofence exits: ${geofenceExitAlerts}`);
     console.log('');
-    console.log(`p50: ${p50}`);
-    console.log(`p95: ${p95}`);
-    console.log(`p99: ${p99}`);
-    console.log(`Worst req: ${worstReq}`);
+    console.log(`p50: ${p50.toFixed(2)}ms`);
+    console.log(`p95: ${p95.toFixed(2)}ms`);
+    console.log(`p99: ${p99.toFixed(2)}ms`);
+    console.log(`Worst req: ${worstReq.toFixed(2)}ms`);
     console.log(`Average latency: ${Number(averageLatency.toFixed(2))}ms`);
 }
 
@@ -154,7 +183,10 @@ const sendRequest = async(vehicle: CreatePosition) => {
             "Content-Type": "application/json",
         },
         body: JSON.stringify(vehicle),
+        signal: AbortSignal.timeout(10000),
     });
+
+    await response.json();
 
     const latency = performance.now() - start;
 
@@ -180,31 +212,57 @@ const createBasicGeofence = async() => {
     });
 }
 
+const updateProcessedRequests = async(): Promise<number> => {
+    const res = await pool.query(`
+        SELECT COUNT(*)
+        FROM vehicle_positions;
+    `);
+
+    return Number(res.rows[0].count);
+}
+
+const sleep = async(ms: number = 1000): Promise<void> => {
+    return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+const logInterval = async() => {
+    while (logging){
+        const timeElapsed = performance.now() - start;
+        const averageLatency = latencies.length === 0 ?
+            0
+            : latencies.reduce((acc, current) => acc + current, 0) / latencies.length;
+
+        processed = await updateProcessedRequests();
+
+        console.log('');
+        console.log(`Time elapsed: ${Math.floor(timeElapsed / 1000)}s`);
+        console.log(`Sent: ${sent}`);
+        console.log('');
+        console.log(`RPS: ${Number((sent / (loadElapsed === 0 ? timeElapsed : loadElapsed) * 1000).toFixed(2))}`);
+        console.log(`APS: ${Number((accepted / (loadElapsed === 0 ? timeElapsed : loadElapsed) * 1000).toFixed(2))}`);
+        console.log('');
+        console.log(`Accepted: ${accepted} (${(accepted / attempted * 100).toFixed(2)}%)`);
+        console.log(`Processed: ${processed} (${(processed / accepted * 100).toFixed(2)}%)`);
+        console.log(`Dropped: ${dropped} (${(dropped / attempted * 100).toFixed(2)}%)`);
+        console.log(`Attempted: ${attempted} / ${requestsToAttempt} (${(attempted / requestsToAttempt * 100).toFixed(2)}%)`);
+        console.log('');
+        console.log(`Failed: ${failed} (${(failed / attempted * 100).toFixed(2)}%)`);
+        console.log(`In flight: ${inFlight} (${(inFlight / requestsToAttempt * 100).toFixed(2)}%)`);
+        console.log(`Average latency: ${averageLatency.toFixed(2)}ms`);
+        console.log('');
+        console.log('');
+
+        await sleep(1000);
+    }
+}
+
 const main = async() => {
     await cleanTables();
     await createBasicGeofence();
 
-    const start = performance.now();
-
-    const logsInterval = setInterval(() => {
-
-        const timeElapsed = performance.now() - start;
-        const averageLatency = latencies.reduce((acc, current) => acc + current, 0) / latencies.length;
-        
-        console.log('');
-        console.log(`Time elapsed: ${Math.floor(timeElapsed / 1000)}s`);
-        console.log(`Sent: ${sent}`);
-        console.log(`RPS: ${Number((sent / timeElapsed * 1000).toFixed(2))}`);
-        console.log(`SPS: ${Number((success / timeElapsed * 1000).toFixed(2))}`);
-        console.log(`Succeeded: ${success}`);
-        console.log(`Failed: ${failed}`);
-        console.log(`In flight: ${inFlight}`);
-        console.log(`Dropped: ${dropped}`);
-        console.log(`Attempted: ${attempted}`);
-        console.log(`Average latency: ${Number(averageLatency.toFixed(2))}ms`);
-        console.log('');
-        console.log('');
-    }, 1000);
+    start = performance.now();
+    
+    logInterval();
 
     const sendRequestsInterval = setInterval(async() => {
         const elapsed = performance.now() - start;
@@ -229,23 +287,16 @@ const main = async() => {
             
             const vehicle: CreatePosition = createVehicle();
 
-
             sendRequest(vehicle)
                 .then(() => {
-                    success++;
+                    accepted++;
                 })
                 .catch(() => {
                     failed++;
                 })
-                .finally(() => {
+                .finally(async() => {
                     inFlight--;
-                    
-                    if (attempted >= requestsToAttempt && inFlight === 0){
-                        clearInterval(logsInterval);
-                        totalElapsed = performance.now() - start;
-                        showResults();
-                        void pool.end();
-                    }
+                    await tryStartDrain();
                 });
         }
 
@@ -253,12 +304,49 @@ const main = async() => {
             clearInterval(sendRequestsInterval);
             loadElapsed = elapsed;
 
+            processedAtLoadEnd = await updateProcessedRequests();
+
             console.log('------------------------------------------------------');
             console.log(`All requests were attempted`);
-            console.log(`Attempted ${attempted} requests in ${Number(elapsed.toFixed(3))} ms`);
+            console.log(`Attempted ${attempted} requests in ${elapsed.toFixed(3)} ms`);
             console.log('------------------------------------------------------');
+
+            await tryStartDrain();
         }
     }, tickMs);
+}
+
+let drainStarted = false;
+
+const tryStartDrain = async() => {
+    if (attempted >= requestsToAttempt && inFlight === 0 && !drainStarted){
+        drainStarted = true;
+
+        acceptedElapsed = performance.now() - start;
+
+        const drainStartedAt = performance.now();
+
+        while (true){
+            processed = await updateProcessedRequests();
+            
+            const drainDuration = performance.now() - drainStartedAt;
+            
+            if (processed >= accepted || drainDuration >= maxTimeout){
+                break;
+            }
+
+            await sleep(1000);
+        }
+        
+        processed = await updateProcessedRequests();
+
+        totalElapsed = performance.now() - start;
+        
+        drainElapsed = performance.now() - drainStartedAt;
+        logging = false;
+        await showResults();
+        await pool.end();
+    }
 }
 
 main();

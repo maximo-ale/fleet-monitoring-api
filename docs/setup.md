@@ -130,9 +130,9 @@ the PostgreSQL pool after it finishes.
 ## Run the Ingestion Simulator
 
 The backend includes a simulator for sending vehicle position events to the API
-at a fixed target rate. It measures request acceptance by the asynchronous
-ingestion endpoint; it does not measure worker throughput or end-to-end
-processing latency.
+at a fixed target rate. It distinguishes HTTP acceptance by the asynchronous
+ingestion endpoint from worker processing: `processed` is the number of rows
+persisted in PostgreSQL after worker processing.
 
 Start the Docker infrastructure, backend, and worker first, then run:
 
@@ -144,20 +144,27 @@ npm run simulate
 The checked-in benchmark configuration targets:
 
 - API URL: `http://localhost:3000/api/vehicles/positions`
-- Target rate: `550` requests per second
-- Duration: `120` seconds
+- Target rate: `400` requests per second
+- Duration: `15` seconds
 - Dispatch tick: `100` milliseconds
-- Max in-flight requests: `5000`
+- Max in-flight requests: `200`
 
-Before starting, the simulator clears `vehicle_positions`,
+Before each run, the simulator clears `vehicle_positions`,
 `vehicle_last_state`, `vehicle_alerts`, and `geofences`, then creates a default
 active rectangular geofence. This is destructive and removes existing
-monitoring and geofence data. During the run it prints live counters, including
-sent requests, effective RPS, successful responses, failed responses,
-in-flight requests, dropped requests, attempted requests, and average latency.
+monitoring and geofence data. For benchmark isolation, RabbitMQ must also start
+clean, with `Ready = 0` and `Unacked = 0`; the simulator does not currently
+purge RabbitMQ automatically. During the run it prints live counters, including
+sent requests, HTTP acceptance, processed rows, failed responses, in-flight
+requests, dropped requests, attempted requests, and average latency.
 
 At the end it prints a benchmark summary with:
 
+- Load duration and load throughput.
+- Acceptance throughput.
+- End-to-end processing throughput.
+- Processed during load and processed during drain.
+- Drain duration and final processed count.
 - Attempted requests.
 - Total requests sent.
 - Successful responses.
@@ -170,12 +177,14 @@ At the end it prints a benchmark summary with:
 - Generated speed-alert events.
 - Generated geofence-exit events.
 
-The simulator runs once per invocation and exits after all in-flight requests
-finish. Wait for `Work Finished` and for the command to return before changing
-the target or starting another run. Running simulators concurrently invalidates
-the result because both processes target the same API and clear the same tables.
-Current synchronous-ingestion measurements are recorded in
-[`benchmarks.md`](benchmarks.md).
+After load generation ends and the pending HTTP requests finish, the simulator
+waits for accepted events to be processed before the benchmark is complete. If
+the drain timeout is reached before all accepted events are processed, treat the
+run as incomplete/failed, not as a successful completed benchmark. Wait for
+`Work Finished` and for the command to return before changing the target or
+starting another run. Running simulators concurrently invalidates the result
+because both processes target the same API and clear the same tables. Historical
+synchronous-ingestion measurements are recorded in [`benchmarks.md`](benchmarks.md).
 
 The simulator generates requests with valid UUIDs and an `eventTime` timestamp
 serialized as an ISO date/time string. Approximately 90% of generated
@@ -185,9 +194,9 @@ generated at or above the configured threshold. The generated counters describe
 the chosen event distribution; persisted alerts are still determined by the
 API rules. The simulator submits position events to the API. The resulting
 background processing includes latest-state updates, speed-limit checks, and
-geofence checks; the simulator itself does not wait for or validate those
-outcomes. It does not exercise alert delivery, route validation, delayed
-events, out-of-order events, or worker throughput.
+geofence checks. It waits for persisted position rows, but does not validate
+alert outcomes. It does not exercise alert delivery, route validation, delayed
+or out-of-order events.
 
 ## Run with Docker
 

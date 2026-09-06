@@ -1,6 +1,7 @@
+import { Request, Response } from 'express';
 import express from 'express';
-import { createTables } from './utils/createTables';
 
+import { createTables } from './utils/createTables';
 import dotenv from 'dotenv';
 import { cleanTables } from './utils/dropTables';
 dotenv.config({ quiet: true });
@@ -18,6 +19,10 @@ await createTables();
 if (process.env.RESET_DB?.trim().toLowerCase() === 'true'){
     await cleanTables();
 }
+
+app.post('/api/empty', (req: Request, res: Response) => {
+    return res.status(202).json({ message: 'Accepted' });
+});
 
 app.use(express.json());
 
