@@ -151,13 +151,21 @@ The simulator is a local load-generation script for the ingestion endpoint.
    while a small percentage exceed it.
 4. It schedules requests according to the configured target events per second.
 5. It sends `POST /api/vehicles/positions` requests to the local API.
-6. It tracks attempted, sent, successful, failed, in-flight, and dropped
-   requests.
-7. It records request latency and reports average, p50, p95, p99, worst
-   request latency, and generated speed-alert and geofence-exit counters.
+6. It tracks attempted, sent, accepted, failed, in-flight, and dropped
+   requests. HTTP acceptance is separate from processing.
+7. It counts `processed` from rows persisted in `vehicle_positions` after
+   worker processing.
+8. After load generation and pending HTTP requests finish, it drains accepted
+   events before completing the benchmark.
+9. It reports load duration, load throughput, acceptance throughput,
+   end-to-end processing throughput, processed during load and drain, drain
+   duration, final processed count, request latency, and generated speed-alert
+   and geofence-exit counters.
 
-This simulator submits events to the asynchronous ingestion endpoint. It does
-not measure worker throughput or end-to-end asynchronous processing latency.
+For benchmark isolation, PostgreSQL is reset before each run. RabbitMQ must
+also be clean before a run (`Ready = 0`, `Unacked = 0`); the simulator does not
+purge RabbitMQ automatically. A drain timeout before all accepted events are
+processed makes the run incomplete/failed rather than a successful benchmark.
 
 ## Current Data Model
 
@@ -238,8 +246,6 @@ Any other error is returned as `500 Internal server error`.
 - There are no alert notification, acknowledgement, or resolution workflows.
 - There are no per-vehicle speed limits.
 - There are no WebSocket or other live updates.
-- The current benchmark script does not benchmark the asynchronous flow,
-  worker throughput, or end-to-end processing latency.
 - There is no formal API versioning.
 - Table creation is embedded in application startup.
 - The current `docker-compose.yml` defines PostgreSQL/PostGIS and RabbitMQ,

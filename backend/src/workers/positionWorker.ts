@@ -41,13 +41,7 @@ const startPositionWorker = async () => {
             );
 
             try {
-                const res: PositionProcessingResult = await saveVehiclePosition(event);
-
-                if (res.status === 'SUCCESS'){
-                    console.log(`SUCCESS: ${JSON.stringify(event, null, 2)}`);
-                } else if (res.status === 'DUPLICATE'){
-                    console.log(`DUPLICATE: ${JSON.stringify(event, null, 2)}`);
-                }
+                await saveVehiclePosition(event);
 
                 channel.ack(message!);
             } catch (err) {
