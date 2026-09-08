@@ -186,6 +186,13 @@ starting another run. Running simulators concurrently invalidates the result
 because both processes target the same API and clear the same tables. Historical
 synchronous-ingestion measurements are recorded in [`benchmarks.md`](benchmarks.md).
 
+Issue #45 established an approximate, conservative baseline of 60 processed
+events/s for the current single-worker asynchronous configuration. At targets
+of 70 RPS and above, queued work grew during load; see
+[`benchmarks.md`](benchmarks.md) for the result table and the historical
+synchronous benchmark context. These runs introduced no performance
+optimizations.
+
 The simulator generates requests with valid UUIDs and an `eventTime` timestamp
 serialized as an ISO date/time string. Approximately 90% of generated
 positions are inside its default geofence and 10% use a longitude outside it.

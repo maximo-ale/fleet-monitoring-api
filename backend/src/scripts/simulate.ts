@@ -20,11 +20,11 @@ let processedAtLoadEnd = 0;
 let speedAlerts = 0;
 let geofenceExitAlerts = 0;
 
-const maxInFlight = 200;
+const maxInFlight = 60;
 
-const requestsPerSecond = 400;
+const requestsPerSecond = 62;
 const tickMs = 100;
-const timeToWork = 15;
+const timeToWork = 60;
 
 const requestsToAttempt = requestsPerSecond * timeToWork;
 const maxTimeout = 30000;
@@ -146,7 +146,7 @@ const showResults = async() => {
     console.log(`Processing throughput (End-to-End): ${Number((processed / totalElapsed * 1000).toFixed(2))}/s including drain`);
     console.log('');
     console.log(`Processed during load: ${processedAtLoadEnd} / ${processed} (${processedAtLoadEndPercentage}%)`);
-    console.log(`Processed during drain: ${processed - processedAtLoadEnd} / ${processed} (${processedDuringDrainPercentage})`);
+    console.log(`Processed during drain: ${processed - processedAtLoadEnd} / ${processed} (${processedDuringDrainPercentage})%`);
     console.log(`Drain: ${(drainElapsed / 1000).toFixed(2)}s`);
     console.log('');
     console.log(`Requests processed: ${processed} / ${accepted}   (${processedPercentage}%)`);
@@ -238,8 +238,9 @@ const logInterval = async() => {
         console.log(`Time elapsed: ${Math.floor(timeElapsed / 1000)}s`);
         console.log(`Sent: ${sent}`);
         console.log('');
-        console.log(`RPS: ${Number((sent / (loadElapsed === 0 ? timeElapsed : loadElapsed) * 1000).toFixed(2))}`);
-        console.log(`APS: ${Number((accepted / (loadElapsed === 0 ? timeElapsed : loadElapsed) * 1000).toFixed(2))}`);
+        console.log(`Requests/s: ${Number((sent / (loadElapsed === 0 ? timeElapsed : loadElapsed) * 1000).toFixed(2))}`);
+        console.log(`Accepted/s: ${Number((accepted / (loadElapsed === 0 ? timeElapsed : loadElapsed) * 1000).toFixed(2))}`);
+        console.log(`Processed/s: ${Number((processed / (loadElapsed === 0 ? timeElapsed : loadElapsed) * 1000).toFixed(2))}`);
         console.log('');
         console.log(`Accepted: ${accepted} (${(accepted / attempted * 100).toFixed(2)}%)`);
         console.log(`Processed: ${processed} (${(processed / accepted * 100).toFixed(2)}%)`);

@@ -1,4 +1,40 @@
-# Historical Synchronous Ingestion Benchmark
+# Benchmarks
+
+## Asynchronous Single-Worker Baseline (Issue #45)
+
+This benchmark establishes the baseline sustained processing capacity of the
+current RabbitMQ-based asynchronous architecture with one worker and the
+existing processing configuration. No performance optimizations were introduced
+as part of Issue #45.
+
+The conservative single-worker baseline is approximately **60 processed events
+per second**. This is not an exact hard limit: results can vary between runs.
+At a 60 RPS target, all 3,600 events were processed, 99.75% were processed
+during the load window, the remaining work drained in 1.02 seconds, and
+end-to-end processing throughput was 58.92 events/s. The system was therefore
+effectively stable at that target.
+
+At 70 RPS and above, ingestion exceeded the worker's processing capacity and
+the RabbitMQ backlog grew during the load window. Raising the ingestion target
+did not materially raise processing throughput, which remained close to 60
+events/s. This indicates that the current bottleneck is in the processing stage,
+not HTTP ingestion.
+
+| Target RPS | Processing throughput | Processed during load | Drain | Outcome |
+| ---: | ---: | ---: | ---: | --- |
+| 60 | 58.92/s | 99.75% | 1.02s | Stable |
+| 70 | 60.70/s | 87.48% | 9.11s | Backlog grows |
+| 100 | 62.11/s | 66.63% | 30.37s | Unsustainable |
+| 300 | 60.09/s | 64.17% | 30.42s | Unsustainable |
+
+These results are not directly comparable to the approximately 550 RPS
+synchronous benchmark below. The earlier synchronous server processed many
+requests concurrently, whereas this baseline measures one worker using the
+existing processing configuration. Its purpose is to establish a baseline
+before worker concurrency, multiple workers, or other optimizations are
+introduced; it does not predict their performance.
+
+## Historical Synchronous Ingestion Benchmark
 
 This benchmark records the synchronous vehicle-position ingestion baseline
 measured before the current RabbitMQ-based asynchronous flow was introduced.
