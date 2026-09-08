@@ -40,6 +40,7 @@ Implemented:
 - Vehicle position ingestion simulator with speed-limit and geofence-exit
   event generation.
 - Fixed-rate ingestion benchmark metrics.
+- Single-worker asynchronous processing benchmark baseline.
 - Speed limit alert persistence for positions above the configured limit.
 - Active-geofence checks with PostGIS and geofence exit alert persistence.
 - Recent alert read endpoint with an optional result limit.
@@ -60,7 +61,6 @@ Not implemented yet:
 - Dashboard or user interface.
 - Authentication.
 - WebSocket or other live updates.
-- Asynchronous-flow benchmarking.
 
 ## Documentation
 

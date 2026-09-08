@@ -91,6 +91,22 @@ database transaction commits. If processing fails before `COMMIT`, the service
 rolls back the transaction and the worker negatively acknowledges the message
 with requeue enabled.
 
+## Single-Worker Processing Baseline
+
+Issue #45 benchmarked the current asynchronous flow with one worker and the
+existing processing configuration. It established an approximate, conservative
+baseline of **60 processed events per second**; it is not an exact hard limit,
+because benchmark results can vary between runs. At a 60 RPS target, all
+3,600 events were processed, 99.75% during load, with a 1.02-second drain and
+58.92 events/s end-to-end processing throughput.
+
+At 70 RPS and above, ingestion outpaced processing and RabbitMQ backlog grew
+during the load window. Processing throughput stayed close to 60 events/s at
+70, 100, and 300 RPS targets, indicating that the current constraint is the
+processing stage rather than HTTP ingestion. No performance optimizations were
+introduced as part of this benchmark. See [Benchmarks](benchmarks.md) for the
+complete results and historical synchronous context.
+
 ## Position Events and Idempotency
 
 The POST body contains `vehicleId`, `speed`, `lon`, `lat`, and `eventTime`.
