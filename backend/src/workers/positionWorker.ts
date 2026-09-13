@@ -23,11 +23,7 @@ const startPositionWorker = async () => {
 
     console.log('Position worker waiting for messages...');
 
-    await channel.prefetch(1);
-
-
-
-    
+    await channel.prefetch(500);
 
     await channel.consume(
         QUEUE_NAME,
