@@ -20,9 +20,9 @@ let processedAtLoadEnd = 0;
 let speedAlerts = 0;
 let geofenceExitAlerts = 0;
 
-const maxInFlight = 60;
+const maxInFlight = 300;
 
-const requestsPerSecond = 62;
+const requestsPerSecond = 550;
 const tickMs = 100;
 const timeToWork = 60;
 
